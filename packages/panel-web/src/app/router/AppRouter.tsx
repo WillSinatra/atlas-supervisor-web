@@ -8,8 +8,11 @@ const LoginPage = lazy(() => import('@/modules/auth/pages/LoginPage'));
 const DashboardPage = lazy(() => import('@/modules/dashboard/pages/DashboardPage'));
 
 const OrdersPlaceholder = lazy(() => import('@/modules/orders/pages/OrdersPage'));
+const OrderDetailPage = lazy(() => import('@/modules/orders/pages/OrderDetailPage'));
 const CrewsPlaceholder = lazy(() => import('@/modules/crews/pages/CrewsPage'));
+const CrewDetailPage = lazy(() => import('@/modules/crews/pages/CrewDetailPage'));
 const CustomersPlaceholder = lazy(() => import('@/modules/customers/pages/CustomersPage'));
+const CustomerDetailPage = lazy(() => import('@/modules/customers/pages/CustomerDetailPage'));
 const ReportsPlaceholder = lazy(() => import('@/modules/reports/pages/ReportsPage'));
 const SettingsPlaceholder = lazy(() => import('@/modules/settings/pages/SettingsPage'));
 
@@ -45,12 +48,24 @@ export const router = createBrowserRouter([
         element: <OrdersPlaceholder />,
       },
       {
+        path: 'orders/:id',
+        element: <OrderDetailPage />,
+      },
+      {
         path: 'crews',
         element: <CrewsPlaceholder />,
       },
       {
+        path: 'crews/:id',
+        element: <CrewDetailPage />,
+      },
+      {
         path: 'customers',
         element: <CustomersPlaceholder />,
+      },
+      {
+        path: 'customers/:id',
+        element: <CustomerDetailPage />,
       },
       {
         path: 'reports',

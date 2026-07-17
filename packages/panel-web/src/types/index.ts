@@ -32,7 +32,7 @@ export interface LoginResponse {
 
 export type WorkOrderStatus = 'PENDING' | 'ASSIGNED' | 'IN_PROGRESS' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED' | 'REOPENED';
 export type WorkOrderPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export type WorkOrderType = 'INSTALLATION' | 'MAINTENANCE' | 'REPAIR' | 'REMOVAL' | 'SURVEY' | 'OTHER';
+export type WorkOrderType = 'INSTALLATION' | 'MAINTENANCE' | 'REPAIR' | 'REMOVAL' | 'UPGRADE' | 'OTHER';
 
 export interface WorkOrder {
   id: string;
@@ -171,7 +171,9 @@ export interface TimelineEntry {
 
 // ============ CUADRILLAS ============
 
-export type CrewStatus = 'AVAILABLE' | 'BUSY' | 'ON_BREAK' | 'OFFLINE';
+export type CrewStatus = 'disponible' | 'en_viaje' | 'trabajando' | 'en_pausa' | 'fuera_de_servicio';
+// TODO: no confirmado en Tomo II todavía si el técnico individual comparte este mismo enum
+// de 5 estados o tiene el suyo propio — se deja el valor anterior hasta confirmar (ver aviso al usuario).
 export type TechnicianStatus = 'AVAILABLE' | 'BUSY' | 'ON_BREAK' | 'OFFLINE';
 export type VehicleType = 'TRUCK' | 'VAN' | 'MOTORCYCLE' | 'BICYCLE' | 'OTHER';
 
@@ -228,6 +230,11 @@ export interface Inventory {
   minQuantity: number;
 }
 
+export interface CrewDetail extends Crew {
+  inventory: Inventory[];
+  workOrders: WorkOrder[];
+}
+
 // ============ CLIENTES ============
 
 export interface Customer {
@@ -266,6 +273,10 @@ export interface CustomerAddress {
   longitude?: number;
   isMain: boolean;
   label?: string;
+}
+
+export interface CustomerDetail extends Customer {
+  workOrders: WorkOrder[];
 }
 
 export interface Equipment {

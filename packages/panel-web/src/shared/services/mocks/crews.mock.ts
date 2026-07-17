@@ -1,0 +1,103 @@
+import type { Crew, Inventory } from '@/types';
+
+export const mockCrews: Crew[] = [
+  {
+    id: 'crew-001',
+    name: 'Cuadrilla Norte',
+    code: 'CN-01',
+    description: 'Especializada en instalaciones residenciales',
+    status: 'disponible',
+    specialty: 'Instalaciones',
+    zone: 'Zona Norte',
+    latitude: -34.5601,
+    longitude: -58.4553,
+    lastGpsUpdate: '2026-07-17T13:40:00.000Z',
+    isActive: true,
+    technicians: [
+      { id: 'tech-001', firstName: 'Diego', lastName: 'Molina', phone: '+54 9 11 5511-0011', status: 'AVAILABLE', specialty: 'Instalaciones', crewId: 'crew-001', isActive: true },
+      { id: 'tech-002', firstName: 'Facundo', lastName: 'Ortiz', phone: '+54 9 11 5511-0022', status: 'AVAILABLE', specialty: 'Instalaciones', crewId: 'crew-001', isActive: true },
+    ],
+    vehicle: { id: 'veh-001', brand: 'Ford', model: 'Transit', plate: 'AF123CD', type: 'VAN', year: 2021, color: 'Blanco' },
+    _count: { workOrders: 1, technicians: 2 },
+    createdAt: '2022-01-10T09:00:00.000Z',
+  },
+  {
+    id: 'crew-002',
+    name: 'Cuadrilla Centro',
+    code: 'CC-02',
+    description: 'Reparaciones y reclamos urgentes',
+    status: 'trabajando',
+    specialty: 'Reparaciones',
+    zone: 'Zona Centro',
+    latitude: -34.6037,
+    longitude: -58.4204,
+    lastGpsUpdate: '2026-07-17T13:42:00.000Z',
+    isActive: true,
+    technicians: [
+      { id: 'tech-003', firstName: 'Nicolás', lastName: 'Paz', phone: '+54 9 11 5522-0033', status: 'BUSY', specialty: 'Reparaciones', crewId: 'crew-002', isActive: true },
+      { id: 'tech-004', firstName: 'Ezequiel', lastName: 'Rojas', phone: '+54 9 11 5522-0044', status: 'BUSY', specialty: 'Reparaciones', crewId: 'crew-002', isActive: true },
+      { id: 'tech-005', firstName: 'Bruno', lastName: 'Sosa', phone: '+54 9 11 5522-0055', status: 'AVAILABLE', specialty: 'Reparaciones', crewId: 'crew-002', isActive: true },
+    ],
+    vehicle: { id: 'veh-002', brand: 'Renault', model: 'Kangoo', plate: 'AG456EF', type: 'VAN', year: 2020, color: 'Blanco' },
+    _count: { workOrders: 3, technicians: 3 },
+    createdAt: '2022-02-14T09:00:00.000Z',
+  },
+  {
+    id: 'crew-003',
+    name: 'Cuadrilla Sur',
+    code: 'CS-03',
+    description: 'Mantenimiento preventivo y correctivo',
+    status: 'en_viaje',
+    specialty: 'Mantenimiento',
+    zone: 'Zona Sur',
+    latitude: -34.6412,
+    longitude: -58.4623,
+    lastGpsUpdate: '2026-07-17T13:15:00.000Z',
+    isActive: true,
+    technicians: [
+      { id: 'tech-006', firstName: 'Martín', lastName: 'Ibáñez', phone: '+54 9 11 5533-0066', status: 'ON_BREAK', specialty: 'Mantenimiento', crewId: 'crew-003', isActive: true },
+      { id: 'tech-007', firstName: 'Agustín', lastName: 'Cabrera', phone: '+54 9 11 5533-0077', status: 'ON_BREAK', specialty: 'Mantenimiento', crewId: 'crew-003', isActive: true },
+    ],
+    vehicle: { id: 'veh-003', brand: 'Fiat', model: 'Fiorino', plate: 'AH789GH', type: 'VAN', year: 2019, color: 'Gris' },
+    _count: { workOrders: 2, technicians: 2 },
+    createdAt: '2022-03-20T09:00:00.000Z',
+  },
+  {
+    id: 'crew-004',
+    name: 'Cuadrilla Oeste',
+    code: 'CO-04',
+    description: 'Instalaciones y reparaciones combinadas',
+    status: 'fuera_de_servicio',
+    specialty: 'Instalaciones y Reparaciones',
+    zone: 'Zona Oeste',
+    latitude: -34.6089,
+    longitude: -58.4871,
+    lastGpsUpdate: '2026-07-17T09:05:00.000Z',
+    isActive: true,
+    technicians: [
+      { id: 'tech-008', firstName: 'Iván', lastName: 'Vega', phone: '+54 9 11 5544-0088', status: 'OFFLINE', specialty: 'Instalaciones', crewId: 'crew-004', isActive: true },
+      { id: 'tech-009', firstName: 'Tomás', lastName: 'Herrera', phone: '+54 9 11 5544-0099', status: 'OFFLINE', specialty: 'Reparaciones', crewId: 'crew-004', isActive: true },
+    ],
+    vehicle: { id: 'veh-004', brand: 'Toyota', model: 'Hilux', plate: 'AJ012IJ', type: 'TRUCK', year: 2022, color: 'Plata' },
+    _count: { workOrders: 2, technicians: 2 },
+    createdAt: '2022-04-05T09:00:00.000Z',
+  },
+];
+
+export const mockInventoryByCrew: Record<string, Inventory[]> = {
+  'crew-001': [
+    { id: 'inv-001', material: { id: 'mat-001', code: 'ONU-HW', name: 'ONU Huawei HG8245', category: 'Equipos', unit: 'unidad', unitPrice: 45000 }, quantity: 8, minQuantity: 3 },
+    { id: 'inv-002', material: { id: 'mat-002', code: 'CBL-UTP', name: 'Cable UTP Cat6 (rollo)', category: 'Cableado', unit: 'rollo', unitPrice: 18000 }, quantity: 2, minQuantity: 2 },
+  ],
+  'crew-002': [
+    { id: 'inv-003', material: { id: 'mat-003', code: 'SPL-OPT', name: 'Splitter óptico 1x8', category: 'Fibra óptica', unit: 'unidad', unitPrice: 9500 }, quantity: 5, minQuantity: 4 },
+    { id: 'inv-004', material: { id: 'mat-004', code: 'CON-RJ45', name: 'Conectores RJ45', category: 'Cableado', unit: 'caja x100', unitPrice: 6200 }, quantity: 1, minQuantity: 2 },
+  ],
+  'crew-003': [
+    { id: 'inv-005', material: { id: 'mat-005', code: 'ROU-WIFI', name: 'Router WiFi TP-Link', category: 'Equipos', unit: 'unidad', unitPrice: 32000 }, quantity: 4, minQuantity: 3 },
+  ],
+  'crew-004': [
+    { id: 'inv-006', material: { id: 'mat-001', code: 'ONU-HW', name: 'ONU Huawei HG8245', category: 'Equipos', unit: 'unidad', unitPrice: 45000 }, quantity: 1, minQuantity: 3 },
+    { id: 'inv-007', material: { id: 'mat-006', code: 'FIB-DROP', name: 'Cable Drop fibra (rollo)', category: 'Fibra óptica', unit: 'rollo', unitPrice: 21000 }, quantity: 3, minQuantity: 2 },
+  ],
+};
