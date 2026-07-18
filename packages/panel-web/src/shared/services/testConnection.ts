@@ -1,10 +1,10 @@
 const BASE_URL = 'https://proyectos.dnatech.net.ar/atlas/v1/public';
 
-export async function testLogin(  email: string,
+export async function testLogin(  email: string = '',
   password: string): Promise<void> {
   const url = `${BASE_URL}/v1/auth/login`;
 
-  console.log(`[testConnection] Peticionando: POST ${url}`);
+  // console.log(`[testConnection] Peticionando: POST ${url}`);
 
   const response = await fetch(url, {
     method: 'POST',
