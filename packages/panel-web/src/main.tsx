@@ -8,6 +8,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/shared/contexts/AuthContext';
 import { ThemeProvider } from '@/shared/contexts/ThemeContext';
 import { router } from '@/app/router/AppRouter';
+// Ignore missing type declarations for CSS modules side-effect import
+// @ts-ignore
 import './styles/globals.css';
 
 const queryClient = new QueryClient({

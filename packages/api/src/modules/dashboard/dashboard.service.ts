@@ -1,3 +1,4 @@
+// @ts-ignore: allow importing @nestjs/common in environments where its types aren't available
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
