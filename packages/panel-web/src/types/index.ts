@@ -20,6 +20,14 @@ export interface AuthTokens {
   refreshToken: string;
   expiresIn: number;
 }
+export interface User {
+  id: string;
+  nombre: string;
+  email: string;
+  rol: 'admin' | 'planificador' | 'despachador' | 'tecnico' | 'operador';
+  cuadrilla_id: string | null;
+  activo: boolean;
+}
 
 export interface LoginResponse {
   user: User;

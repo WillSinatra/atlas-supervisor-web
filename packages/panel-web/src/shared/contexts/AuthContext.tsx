@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authApi.login({ email, password });
       console.log('[AuthContext] Login successful:', response);
-      const { user: userData, accessToken, refreshToken } = response.data;
+      const { user: userData, accessToken, refreshToken } = response;
       localStorage.setItem('accessToken', accessToken);
       localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
-        await authApi.logout(refreshToken);
+        await authApi.logout();
       }
     } catch {
       // Ignorar errores de logout

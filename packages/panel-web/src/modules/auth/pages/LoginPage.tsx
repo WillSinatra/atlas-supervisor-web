@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/shared/contexts/AuthContext';
+import { mensajeDeError } from '@/shared/services/api';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Alert } from '@/shared/components/ui/Alert';
@@ -15,39 +16,22 @@ export default function LoginPage() {
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = async () => {
-    console.log('[Login] Intentando con:', email);
-
-    const response = await fetch(
-      'https://proyectos.dnatech.net.ar/atlas/v1/public/v1/auth/login',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      }
-    );
-
-    const data = await response.json();
-    console.log('[Login] Status:', response.status);
-    console.log('[Login] Respuesta:', data);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (!email || !password) {
-      setError('Todos los campos son requeridos');
+      setError('Ingresá tu email y tu contraseña.');
       return;
     }
 
     try {
-      await handleLogin();
+      // login() usa authApi.login, que guarda accessToken, refreshToken y user.
       await login(email, password);
-      // navigate('/dashboard');
-    } catch (err: any) {
-      const message = err?.response?.data?.message?.[0] || 'Error al iniciar sesión';
-      setError(Array.isArray(message) ? message[0] : message);
+      navigate('/dashboard');
+    } catch (err) {
+      // La API devuelve { error, message, detalles? }: mensajeDeError toma el message.
+      setError(mensajeDeError(err));
     }
   };
 
@@ -72,7 +56,7 @@ export default function LoginPage() {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="supervisor@atlas.com"
+          placeholder="admin@atlas.local"
           autoComplete="email"
           autoFocus
         />

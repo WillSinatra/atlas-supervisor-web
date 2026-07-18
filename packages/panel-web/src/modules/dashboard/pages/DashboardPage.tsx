@@ -1,9 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { dashboardApi } from '@/shared/services/api';
+import { dashboardApi, mensajeDeError } from '@/shared/services/api';
 import { KpiCard } from '@/shared/components/ui/KpiCard';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
-import type { DashboardData } from '@/types';
+import {
+  coloresEstado,
+  etiquetasEstado,
+  textoVencimiento,
+  type DashboardData,
+} from '@/types/atlas';
 import {
   ClipboardList,
   Clock,
@@ -15,6 +20,7 @@ import {
   MapPin,
   Inbox,
   ShieldCheck,
+  WifiOff,
 } from 'lucide-react';
 
 const container = {
@@ -30,21 +36,11 @@ const item = {
   show: { opacity: 1, y: 0 },
 };
 
-const statusColors: Record<string, string> = {
-  PENDING: 'bg-slate-400',
-  ASSIGNED: 'bg-blue-500',
-  IN_PROGRESS: 'bg-amber-500',
-  COMPLETED: 'bg-emerald-500',
-  CANCELLED: 'bg-red-500',
-};
-
 export default function DashboardPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
-    queryFn: async () => {
-      const response = await dashboardApi.get();
-      return response.data.data as DashboardData;
-    },
+    // La respuesta viene sin envoltorio: dashboardApi.get() ya devuelve el objeto.
+    queryFn: () => dashboardApi.get(),
     refetchInterval: 30000,
   });
 
@@ -56,35 +52,49 @@ export default function DashboardPage() {
     );
   }
 
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <EmptyState
+          icon={<WifiOff className="w-8 h-8" />}
+          title="No se pudo cargar el panel"
+          description={mensajeDeError(error)}
+        />
+      </div>
+    );
+  }
+
+  const t = data?.tarjetas;
+
   const cards = [
     {
       label: 'Órdenes Pendientes',
-      value: data?.cards.pendingOrders ?? 0,
+      value: t?.ordenes_pendientes ?? 0,
       icon: <ClipboardList className="w-5 h-5" />,
     },
     {
-      label: 'En Progreso',
-      value: data?.cards.inProgressOrders ?? 0,
+      label: 'En Proceso',
+      value: t?.ordenes_en_proceso ?? 0,
       icon: <Activity className="w-5 h-5" />,
     },
     {
       label: 'Completadas Hoy',
-      value: data?.cards.completedToday ?? 0,
+      value: t?.completadas_hoy ?? 0,
       icon: <CheckCircle2 className="w-5 h-5" />,
     },
     {
       label: 'Vencidas',
-      value: data?.cards.overdueOrders ?? 0,
+      value: t?.ordenes_vencidas ?? 0,
       icon: <AlertTriangle className="w-5 h-5" />,
     },
     {
       label: 'Cuadrillas Disponibles',
-      value: data?.cards.availableCrews ?? 0,
+      value: t?.cuadrillas_disponibles ?? 0,
       icon: <Users className="w-5 h-5" />,
     },
     {
       label: 'Cuadrillas Ocupadas',
-      value: data?.cards.busyCrews ?? 0,
+      value: t?.cuadrillas_ocupadas ?? 0,
       icon: <Wrench className="w-5 h-5" />,
     },
   ];
@@ -96,7 +106,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Resumen operativo en tiempo real
+            Resumen operativo en tiempo realfsdfsdfsd
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -120,24 +130,28 @@ export default function DashboardPage() {
         <motion.div variants={item} className="card p-5">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Órdenes Recientes</h3>
           <div className="space-y-3">
-            {data?.recentOrders?.slice(0, 5).map((order) => (
-              <div key={order.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50">
+            {data?.ordenes_recientes?.slice(0, 5).map((orden) => (
+              <div
+                key={orden.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50"
+              >
                 <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${statusColors[order.status]}`} />
+                  <div
+                    className={`w-2 h-2 rounded-full ${coloresEstado[orden.estado]}`}
+                    title={etiquetasEstado[orden.estado]}
+                  />
                   <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">{order.orderNumber}</p>
-                    <p className="text-xs text-slate-500">{order.title}</p>
+                    <p className="text-sm font-medium text-slate-900 dark:text-white">{orden.numero}</p>
+                    <p className="text-xs text-slate-500">{orden.titulo ?? orden.tipo}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">
-                    {order.customer?.firstName} {order.customer?.lastName}
-                  </p>
-                  <p className="text-xs text-slate-400">{order.crew?.name || 'Sin asignar'}</p>
+                  <p className="text-xs text-slate-500">{orden.cliente.nombre}</p>
+                  <p className="text-xs text-slate-400">{orden.cuadrilla?.nombre ?? 'Sin asignar'}</p>
                 </div>
               </div>
             ))}
-            {(!data?.recentOrders || data.recentOrders.length === 0) && (
+            {(!data?.ordenes_recientes || data.ordenes_recientes.length === 0) && (
               <EmptyState
                 icon={<Inbox className="w-8 h-8" />}
                 title="Sin órdenes recientes"
@@ -151,27 +165,54 @@ export default function DashboardPage() {
         <motion.div variants={item} className="card p-5">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
             Alertas SLA
-            {data?.slaAlerts && data.slaAlerts.length > 0 && (
+            {data?.alertas_sla && data.alertas_sla.length > 0 && (
               <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full">
-                {data.slaAlerts.length}
+                {data.alertas_sla.length}
               </span>
             )}
           </h3>
           <div className="space-y-3">
-            {data?.slaAlerts?.slice(0, 5).map((alert) => (
-              <div key={alert.id} className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/30">
+            {data?.alertas_sla?.slice(0, 5).map((alerta) => (
+              <div
+                key={alerta.id}
+                className={`flex items-center justify-between p-3 rounded-lg border ${
+                  alerta.vencida
+                    ? 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-800/30'
+                    : 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-800/30'
+                }`}
+              >
                 <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                  <AlertTriangle
+                    className={`w-4 h-4 ${alerta.vencida ? 'text-red-500' : 'text-amber-500'}`}
+                  />
                   <div>
-                    <p className="text-sm font-medium text-red-800 dark:text-red-300">{alert.orderNumber}</p>
-                    <p className="text-xs text-red-600 dark:text-red-400">
-                      SLA: {alert.sla?.name} - Límite: {alert.sla?.resolveTime}min
+                    <p
+                      className={`text-sm font-medium ${
+                        alerta.vencida
+                          ? 'text-red-800 dark:text-red-300'
+                          : 'text-amber-800 dark:text-amber-300'
+                      }`}
+                    >
+                      {alerta.numero}
+                    </p>
+                    <p
+                      className={`text-xs ${
+                        alerta.vencida
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-amber-600 dark:text-amber-400'
+                      }`}
+                    >
+                      {alerta.sla.nombre} · {textoVencimiento(alerta.minutos_restantes)}
                     </p>
                   </div>
                 </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-500">{alerta.cliente.nombre}</p>
+                  <p className="text-xs text-slate-400">{alerta.cuadrilla_nombre ?? 'Sin asignar'}</p>
+                </div>
               </div>
             ))}
-            {(!data?.slaAlerts || data.slaAlerts.length === 0) && (
+            {(!data?.alertas_sla || data.alertas_sla.length === 0) && (
               <EmptyState
                 icon={<ShieldCheck className="w-8 h-8" />}
                 title="Sin alertas activas"
@@ -181,6 +222,36 @@ export default function DashboardPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* Actividad reciente */}
+      <motion.div variants={item} className="card p-5">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Actividad Reciente</h3>
+        <div className="space-y-2">
+          {data?.actividad?.slice(0, 8).map((evento) => (
+            <div key={evento.id} className="flex items-start gap-3 py-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-atlas-600 mt-1.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-slate-700 dark:text-slate-200">
+                  <span className="font-medium">{evento.orden_numero}</span>
+                  {' — '}
+                  {evento.descripcion ?? evento.tipo_evento}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {evento.usuario_nombre ?? 'Sistema'} ·{' '}
+                  {new Date(evento.creado_en).toLocaleString('es-AR')}
+                </p>
+              </div>
+            </div>
+          ))}
+          {(!data?.actividad || data.actividad.length === 0) && (
+            <EmptyState
+              icon={<Activity className="w-8 h-8" />}
+              title="Sin actividad todavía"
+              description="Los movimientos de las órdenes van a aparecer acá."
+            />
+          )}
+        </div>
+      </motion.div>
 
       {/* Mapa placeholder */}
       <motion.div variants={item} className="card p-5">

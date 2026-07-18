@@ -19,6 +19,7 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": ["src/*"],
       "@shared/*": ["src/shared/*"],
