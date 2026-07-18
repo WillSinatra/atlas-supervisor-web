@@ -396,6 +396,47 @@ export interface MaterialUsage {
   totalUsed: number;
 }
 
+export interface CostBreakdownItem {
+  id: string;
+  name: string;
+  total: number;
+}
+
+export interface CostsReport {
+  totalPeriod: number;
+  byCrew: CostBreakdownItem[];
+  byMaterial: CostBreakdownItem[];
+}
+
+export interface SlaComplianceGroup {
+  id: string;
+  name: string;
+  totalOrders: number;
+  withinSla: number;
+  complianceRate: number;
+}
+
+export interface SlaComplianceReport {
+  byCrew: SlaComplianceGroup[];
+  byCustomerType: SlaComplianceGroup[];
+}
+
+export interface RecurrenceEntry {
+  addressId: string;
+  customerName: string;
+  addressLabel: string;
+  claimsCount: number;
+  lastClaimDate: string;
+}
+
+export type SatisfactionDistribution = Record<1 | 2 | 3 | 4 | 5, number>;
+
+export interface SatisfactionReport {
+  average: number;
+  totalRatings: number;
+  distribution: SatisfactionDistribution;
+}
+
 // ============ PAGINACIÓN ============
 
 export interface PaginationMeta {

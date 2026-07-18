@@ -5,6 +5,7 @@ import { useAuth } from '@/shared/contexts/AuthContext';
 import { useTheme } from '@/shared/contexts/ThemeContext';
 import { cn } from '@/shared/utils/cn';
 import { Logo } from '@/shared/components/Logo';
+import NotificationsDropdown from '@/shared/components/NotificationsDropdown';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -13,7 +14,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Bell,
   Search,
   Menu,
   ChevronLeft,
@@ -220,10 +220,7 @@ export default function DashboardLayout() {
               />
             </div>
 
-            <button className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
-              <Bell className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
-            </button>
+            <NotificationsDropdown />
 
             <div className="relative">
               <button

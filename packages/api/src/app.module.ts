@@ -12,6 +12,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { HealthModule } from './modules/health/health.module';
 import { WebsocketsModule } from './websockets/websockets.module';
 
 @Module({
@@ -39,6 +40,7 @@ import { WebsocketsModule } from './websockets/websockets.module';
     ReportsModule,
     SettingsModule,
     NotificationsModule,
+    HealthModule,
     WebsocketsModule,
   ],
   providers: [

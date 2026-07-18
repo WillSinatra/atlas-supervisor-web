@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_URL = '/api/v1';
+const API_URL = 'https://proyectos.dnatech.net.ar/atlas/v1/public';
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -63,12 +63,12 @@ api.interceptors.response.use(
 
 // Auth
 export const authApi = {
-  login: (data: { email: string; password: string }) => api.post('/auth/login', data),
+  login: (data: { email: string; password: string }) => api.post('/v1/auth/login', data),
   register: (data: { email: string; password: string; firstName: string; lastName: string }) =>
-    api.post('/auth/register', data),
-  refresh: (refreshToken: string) => api.post('/auth/refresh', { refreshToken }),
-  logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
-  profile: () => api.get('/auth/profile'),
+    api.post('/v1/auth/register', data),
+  refresh: (refreshToken: string) => api.post('/v1/auth/refresh', { refreshToken }),
+  logout: (refreshToken: string) => api.post('/v1/auth/logout', { refreshToken }),
+  profile: () => api.get('/v1/auth/profile'),
 };
 
 // Orders

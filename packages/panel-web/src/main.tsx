@@ -1,3 +1,6 @@
+import { testLogin } from './shared/services/testConnection';
+testLogin();
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';

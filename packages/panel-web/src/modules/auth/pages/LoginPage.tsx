@@ -15,6 +15,23 @@ export default function LoginPage() {
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
+  const handleLogin = async () => {
+    console.log('[Login] Intentando con:', email);
+
+    const response = await fetch(
+      'https://proyectos.dnatech.net.ar/atlas/v1/public/v1/auth/login',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      }
+    );
+
+    const data = await response.json();
+    console.log('[Login] Status:', response.status);
+    console.log('[Login] Respuesta:', data);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -25,8 +42,9 @@ export default function LoginPage() {
     }
 
     try {
+      await handleLogin();
       await login(email, password);
-      navigate('/dashboard');
+      // navigate('/dashboard');
     } catch (err: any) {
       const message = err?.response?.data?.message?.[0] || 'Error al iniciar sesión';
       setError(Array.isArray(message) ? message[0] : message);
