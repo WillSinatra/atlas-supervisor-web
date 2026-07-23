@@ -1,11 +1,87 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CreateCrewDto } from './dto/create-crew.dto';
+import { UpdateCrewDto } from './dto/update-crew.dto';
+import { CrewStatus } from '@prisma/client';
 
 @Injectable()
 export class CrewsService {
   private readonly logger = new Logger(CrewsService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  async create(createCrewDto: CreateCrewDto) {
+    const { name, code } = createCrewDto;
+    const existingCrew = await this.prisma.crew.findFirst({
+      where: { OR: [{ name }, { code }] },
+    });
+    if (existingCrew) {
+      throw new ConflictException(
+        'Ya existe una cuadrilla con este nombre o código',
+      );
+    }
+    return this.prisma.crew.create({ data: createCrewDto });
+  }
+
+  async update(id: string, updateCrewDto: UpdateCrewDto) {
+    const crew = await this.prisma.crew.findUnique({ where: { id } });
+    if (!crew) {
+      throw new NotFoundException('Cuadrilla no encontrada');
+    }
+
+    if (updateCrewDto.name && updateCrewDto.name !== crew.name) {
+      const existingCrew = await this.prisma.crew.findFirst({
+        where: { name: updateCrewDto.name },
+      });
+      if (existingCrew) {
+        throw new ConflictException(
+          'Ya existe una cuadrilla con este nombre',
+        );
+      }
+    }
+
+    if (updateCrewDto.code && updateCrewDto.code !== crew.code) {
+      const existingCrew = await this.prisma.crew.findFirst({
+        where: { code: updateCrewDto.code },
+      });
+      if (existingCrew) {
+        throw new ConflictException(
+          'Ya existe una cuadrilla con este código',
+        );
+      }
+    }
+
+    return this.prisma.crew.update({
+      where: { id },
+      data: updateCrewDto,
+    });
+  }
+
+  async remove(id: string) {
+    const crew = await this.prisma.crew.findUnique({ where: { id } });
+    if (!crew) {
+      throw new NotFoundException('Cuadrilla no encontrada');
+    }
+
+    const activeOrders = await this.prisma.workOrder.count({
+      where: { crewId: id, status: { in: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] } },
+    });
+    if (activeOrders > 0) {
+      throw new ConflictException('No se puede eliminar una cuadrilla con órdenes activas');
+    }
+
+    await this.prisma.crew.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    return { id, eliminado: true };
+  }
 
   async findAll(params: { page?: number; limit?: number; status?: string; zone?: string }) {
     const { page = 1, limit = 20, status, zone } = params;
@@ -97,13 +173,13 @@ export class CrewsService {
     });
   }
 
-  async updateStatus(id: string, status: string) {
+  async updateStatus(id: string, status: CrewStatus) {
     const crew = await this.prisma.crew.findUnique({ where: { id } });
     if (!crew) throw new NotFoundException('Cuadrilla no encontrada');
 
     return this.prisma.crew.update({
       where: { id },
-      data: { status: status as any },
+      data: { status },
     });
   }
 }

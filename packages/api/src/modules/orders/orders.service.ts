@@ -1,12 +1,57 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { StorageService } from '../files/storage.service';
+import { DispatchService } from '../dispatch/dispatch.service';
+import { Prisma, WorkOrderStatus } from '@prisma/client';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
+import { CheckinOrderDto } from './dto/checkin-order.dto';
+import { CompleteOrderDto } from './dto/complete-order.dto';
+import { PhotoUploadType } from './dto/upload-photo.dto';
 
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+    private readonly dispatchService: DispatchService,
+  ) {}
+
+  async create(createOrderDto: CreateOrderDto, userId: string) {
+    const orderNumber = `WO-${new Date().getTime()}`;
+    const order = await this.prisma.workOrder.create({
+      data: {
+        ...createOrderDto,
+        orderNumber,
+        createdById: userId,
+      },
+    });
+
+    await this.prisma.timelineEntry.create({
+      data: {
+        orderId: order.id,
+        type: 'system',
+        title: 'Orden de trabajo creada',
+        userId,
+      },
+    });
+
+    // Se dispara después de confirmar el alta (nunca dentro de la transacción de arriba):
+    // si el alta se revirtiera no debe quedar una cascada sobre una orden inexistente.
+    this.dispatchService.onOrderCreated(order.id).catch((err) =>
+      this.logger.error(`Error al iniciar despacho para OT ${order.id}: ${err.message}`, err.stack),
+    );
+
+    return order;
+  }
 
   async findAll(params: {
     page?: number;
@@ -254,6 +299,250 @@ export class OrdersService {
       overdue,
       byPriority,
       byStatus,
+    };
+  }
+
+  private async getOrderOrThrow(id: string) {
+    const order = await this.prisma.workOrder.findUnique({ where: { id } });
+    if (!order) {
+      throw new NotFoundException('Orden de trabajo no encontrada');
+    }
+    return order;
+  }
+
+  private async recordTimeline(
+    orderId: string,
+    userId: string,
+    title: string,
+    description?: string,
+  ) {
+    return this.prisma.timelineEntry.create({
+      data: {
+        orderId,
+        type: 'system',
+        title,
+        description,
+        userId,
+      },
+    });
+  }
+
+  async update(id: string, dto: UpdateOrderDto, userId: string) {
+    if (!dto || Object.keys(dto).length === 0) {
+      throw new BadRequestException('Debe enviar al menos un campo para actualizar');
+    }
+
+    await this.getOrderOrThrow(id);
+
+    const [updated] = await Promise.all([
+      this.prisma.workOrder.update({ where: { id }, data: dto as Prisma.WorkOrderUpdateInput }),
+      this.recordTimeline(id, userId, 'Orden actualizada', Object.keys(dto).join(', ')),
+    ]);
+
+    return updated;
+  }
+
+  async accept(id: string, userId: string) {
+    const order = await this.getOrderOrThrow(id);
+
+    if (order.status !== WorkOrderStatus.ASSIGNED) {
+      throw new ConflictException('La orden debe estar asignada para poder aceptarse');
+    }
+
+    const [updated] = await Promise.all([
+      this.prisma.workOrder.update({
+        where: { id },
+        data: { status: WorkOrderStatus.ACCEPTED, acceptedAt: new Date() },
+      }),
+      this.prisma.workOrderStatusHistory.create({
+        data: { orderId: id, fromStatus: order.status, toStatus: WorkOrderStatus.ACCEPTED, changedBy: userId },
+      }),
+      this.recordTimeline(id, userId, 'Orden aceptada'),
+    ]);
+
+    return updated;
+  }
+
+  async reject(id: string, userId: string, reason: string) {
+    const order = await this.getOrderOrThrow(id);
+
+    if (!([WorkOrderStatus.ASSIGNED, WorkOrderStatus.ACCEPTED] as WorkOrderStatus[]).includes(order.status)) {
+      throw new ConflictException('La orden debe estar asignada o aceptada para poder rechazarse');
+    }
+
+    const [updated] = await Promise.all([
+      this.prisma.workOrder.update({
+        where: { id },
+        data: { status: WorkOrderStatus.PENDING, crewId: null, acceptedAt: null },
+      }),
+      this.prisma.workOrderStatusHistory.create({
+        data: { orderId: id, fromStatus: order.status, toStatus: WorkOrderStatus.PENDING, changedBy: userId, reason },
+      }),
+      this.recordTimeline(id, userId, 'Orden rechazada', reason),
+    ]);
+
+    return updated;
+  }
+
+  async checkin(id: string, userId: string, dto: CheckinOrderDto) {
+    const order = await this.getOrderOrThrow(id);
+
+    if (!([WorkOrderStatus.ASSIGNED, WorkOrderStatus.ACCEPTED] as WorkOrderStatus[]).includes(order.status)) {
+      throw new ConflictException('La orden debe estar asignada o aceptada para hacer check-in');
+    }
+
+    const data: Prisma.WorkOrderUpdateInput = {
+      status: WorkOrderStatus.IN_PROGRESS,
+      arrivedAt: new Date(),
+      startedAt: new Date(),
+    };
+    if (dto?.lat !== undefined) data.latitude = dto.lat;
+    if (dto?.lng !== undefined) data.longitude = dto.lng;
+
+    const [updated] = await Promise.all([
+      this.prisma.workOrder.update({ where: { id }, data }),
+      this.prisma.workOrderStatusHistory.create({
+        data: { orderId: id, fromStatus: order.status, toStatus: WorkOrderStatus.IN_PROGRESS, changedBy: userId },
+      }),
+      this.recordTimeline(id, userId, 'Check-in realizado', dto?.lat !== undefined ? `lat:${dto.lat}, lng:${dto.lng}` : undefined),
+    ]);
+
+    return updated;
+  }
+
+  async complete(id: string, userId: string, dto: CompleteOrderDto) {
+    const order = await this.prisma.workOrder.findUnique({
+      where: { id },
+      include: { signature: true, photos: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Orden de trabajo no encontrada');
+    }
+
+    if (order.status === WorkOrderStatus.COMPLETED) {
+      return { ...order, duplicado: true };
+    }
+
+    if (order.status === WorkOrderStatus.CANCELLED) {
+      throw new ConflictException('No se puede completar una orden cancelada');
+    }
+
+    const hasSignature = !!order.signature;
+    const hasPhotoAfter = order.photos.some((p) => p.type === 'after');
+
+    const detalles: string[] = [];
+    if (!hasSignature) detalles.push('firma_cliente');
+    if (!hasPhotoAfter) detalles.push('foto_despues');
+
+    if (detalles.length > 0) {
+      throw new BadRequestException({
+        message: 'Faltan datos requeridos para completar la orden',
+        detalles,
+      });
+    }
+
+    const [updated] = await Promise.all([
+      this.prisma.workOrder.update({
+        where: { id },
+        data: {
+          status: WorkOrderStatus.COMPLETED,
+          completedAt: new Date(),
+          resolution: dto?.resolution,
+          notes: dto?.notes ?? order.notes,
+        },
+      }),
+      this.prisma.workOrderStatusHistory.create({
+        data: { orderId: id, fromStatus: order.status, toStatus: WorkOrderStatus.COMPLETED, changedBy: userId },
+      }),
+      this.recordTimeline(id, userId, 'Orden completada'),
+    ]);
+
+    return { ...updated, duplicado: false };
+  }
+
+  async cancel(id: string, userId: string, reason: string) {
+    const order = await this.getOrderOrThrow(id);
+
+    if (order.status === WorkOrderStatus.CANCELLED) {
+      return { ...order, duplicado: true };
+    }
+
+    if (order.status === WorkOrderStatus.COMPLETED) {
+      throw new ConflictException('No se puede cancelar una orden completada');
+    }
+
+    const [updated] = await Promise.all([
+      this.prisma.workOrder.update({
+        where: { id },
+        data: {
+          status: WorkOrderStatus.CANCELLED,
+          cancelledAt: new Date(),
+          cancellationReason: reason,
+        },
+      }),
+      this.prisma.workOrderStatusHistory.create({
+        data: { orderId: id, fromStatus: order.status, toStatus: WorkOrderStatus.CANCELLED, changedBy: userId, reason },
+      }),
+      this.recordTimeline(id, userId, 'Orden cancelada', reason),
+    ]);
+
+    return { ...updated, duplicado: false };
+  }
+
+  async uploadSignature(id: string, userId: string, file: Express.Multer.File) {
+    await this.getOrderOrThrow(id);
+
+    const storageKey = await this.storage.save(id, file.buffer, file.originalname);
+
+    const signature = await this.prisma.signature.upsert({
+      where: { orderId: id },
+      create: { orderId: id, url: storageKey, mimeType: file.mimetype, size: file.size },
+      update: { url: storageKey, mimeType: file.mimetype, size: file.size },
+    });
+
+    await this.recordTimeline(id, userId, 'Firma del cliente cargada');
+
+    return signature;
+  }
+
+  async uploadPhoto(id: string, userId: string, file: Express.Multer.File, type: PhotoUploadType = 'photo') {
+    await this.getOrderOrThrow(id);
+
+    const storageKey = await this.storage.save(id, file.buffer, file.originalname);
+
+    const photo = await this.prisma.photo.create({
+      data: {
+        orderId: id,
+        url: storageKey,
+        type,
+        mimeType: file.mimetype,
+        size: file.size,
+      },
+    });
+
+    await this.recordTimeline(id, userId, type === 'after' ? 'Foto de cierre cargada' : 'Foto cargada');
+
+    return photo;
+  }
+
+  async listPhotos(id: string) {
+    await this.getOrderOrThrow(id);
+
+    const photos = await this.prisma.photo.findMany({
+      where: { orderId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      orderId: id,
+      photos: photos.map((f) => ({
+        id: f.id,
+        type: f.type,
+        mime: f.mimeType,
+        size: f.size,
+        url: `/api/v1/files/${f.id}`,
+        createdAt: f.createdAt,
+      })),
     };
   }
 }

@@ -61,8 +61,30 @@ export interface Orden {
   cancelada_en: FechaIso | null;
 }
 
+export interface CrearOrdenInput {
+  tipo: string;
+  prioridad: PrioridadOrden;
+  cliente_id: string;
+  domicilio_id: string;
+  titulo?: string;
+  descripcion?: string;
+  falla?: string;
+  sla_id?: string;
+  fecha_programada?: FechaIso;
+}
+
+export interface EditarOrdenInput {
+  titulo?: string;
+  descripcion?: string;
+  prioridad?: PrioridadOrden;
+  falla?: string;
+  sla_id?: string;
+  fecha_programada?: FechaIso;
+}
+
 export interface EventoOrden {
-  id: string;
+  /** No siempre presente: la línea de tiempo de detalle de orden no la incluye. */
+  id?: string;
   tipo_evento: string;
   descripcion: string | null;
   usuario_id: string | null;
@@ -92,8 +114,7 @@ export interface Cuadrilla {
   id: string;
   nombre: string;
   estado: EstadoCuadrilla;
-  lat: number | null;
-  lng: number | null;
+  ubicacion: { lat: number; lng: number } | null;
   ubicacion_actualizada_en: FechaIso | null;
   creado_en: FechaIso;
   actualizado_en: FechaIso;

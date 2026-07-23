@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import type {
   DashboardData,
@@ -9,7 +11,10 @@ import type {
   Usuario,
   Archivo,
   EventoOrden,
+  CrearOrdenInput,
+  EditarOrdenInput,
 } from '../../types/atlas';
+import type { UserRole } from '../../types';
 
 /**
  * Cliente HTTP de la API Atlas.
@@ -18,7 +23,15 @@ import type {
  * server no tiene efecto, hay que recompilar):
  *   VITE_API_URL=https://proyectoatlas.dnatech.net.ar/api
  */
-const API_URL =  'https://proyectoatlas.dnatech.net.ar/api';
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  // Fallback para desarrollo: si VITE_API_URL no está definido en .env se usa el
+  // valor por defecto. IMPORTANTE: en producción SIEMPRE debe existir VITE_API_URL.
+  'http://localhost:3000/api';
+
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('[API] VITE_API_URL no definido; usando fallback de desarrollo:', API_URL);
+}
 
 export const api: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -33,7 +46,7 @@ export const api: AxiosInstance = axios.create({
 
 export interface UsuarioSesion {
   id: string;
-  rol: 'admin' | 'planificador' | 'despachador' | 'tecnico' | 'operador';
+  rol: UserRole;
   cuadrilla_id: string | null;
 }
 
@@ -85,6 +98,35 @@ const procesarCola = (token: string | null) => {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    if (error.response) {
+      const { status, data, config } = error.response;
+
+      console.error(`[API Error] Status: ${status}`, {
+        data,
+        endpoint: config.url,
+      });
+
+      // Dispara un CustomEvent para que la UI/Toasts escuche errores globales.
+      window.dispatchEvent(
+        new CustomEvent('api:error', {
+          detail: {
+            status,
+            message: mensajeDeError(error),
+            detalles: (data as { detalles?: string[] }).detalles,
+            endpoint: config.url,
+          },
+        }),
+      );
+    } else if (error.request) {
+      console.error('[API Error] No se recibió respuesta del servidor', {
+        request: error.request,
+      });
+    } else {
+      console.error('[API Error] Error al configurar la petición', {
+        message: error.message,
+      });
+    }
+
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     const isAuthEndpoint =
       originalRequest?.url?.includes('/auth/login') || originalRequest?.url?.includes('/auth/refresh');
@@ -203,6 +245,10 @@ export const dashboardApi = {
     const { data } = await api.get<DashboardData>('/v1/dashboard', { params });
     return data;
   },
+  async stats() {
+    const { data } = await api.get('/v1/dashboard/stats');
+    return data;
+  },
 };
 
 export const slasApi = {
@@ -223,11 +269,11 @@ export const ordenesApi = {
     const { data } = await api.get<Orden & { linea_tiempo: EventoOrden[] }>(`/v1/ordenes/${id}`);
     return data;
   },
-  async crear(payload: Partial<Orden>) {
-    const { data } = await api.post<Orden>('/v1/ordenes', payload);
+  async crear(payload: CrearOrdenInput) {
+    const { data } = await api.post<Orden & { duplicado?: boolean }>('/v1/ordenes', payload);
     return data;
   },
-  async actualizar(id: string, payload: Partial<Orden>) {
+  async actualizar(id: string, payload: EditarOrdenInput) {
     const { data } = await api.patch<Orden>(`/v1/ordenes/${id}`, payload);
     return data;
   },

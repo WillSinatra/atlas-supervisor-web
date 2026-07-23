@@ -36,6 +36,9 @@ docker-data/
 # Prisma
 packages/api/prisma/migrations/
 
+# Uploaded files
+packages/api/uploads/
+
 # Coverage
 coverage/
 

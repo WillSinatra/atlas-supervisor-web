@@ -9,6 +9,7 @@ const DashboardPage = lazy(() => import('@/modules/dashboard/pages/DashboardPage
 
 const OrdersPlaceholder = lazy(() => import('@/modules/orders/pages/OrdersPage'));
 const OrderDetailPage = lazy(() => import('@/modules/orders/pages/OrderDetailPage'));
+const NuevaOrdenPage = lazy(() => import('@/modules/orders/pages/NuevaOrdenPage'));
 const CrewsPlaceholder = lazy(() => import('@/modules/crews/pages/CrewsPage'));
 const CrewDetailPage = lazy(() => import('@/modules/crews/pages/CrewDetailPage'));
 const CustomersPlaceholder = lazy(() => import('@/modules/customers/pages/CustomersPage'));
@@ -46,6 +47,10 @@ export const router = createBrowserRouter([
       {
         path: 'orders',
         element: <OrdersPlaceholder />,
+      },
+      {
+        path: 'orders/nueva',
+        element: <NuevaOrdenPage />,
       },
       {
         path: 'orders/:id',
