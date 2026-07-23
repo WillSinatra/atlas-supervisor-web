@@ -17,6 +17,7 @@ enum UserRole {
 enum WorkOrderStatus {
   PENDING
   ASSIGNED
+  ACCEPTED
   IN_PROGRESS
   ON_HOLD
   COMPLETED
@@ -60,6 +61,19 @@ enum VehicleType {
   MOTORCYCLE
   BICYCLE
   OTHER
+}
+
+enum DispatchMode {
+  CASCADE
+  OPEN
+}
+
+enum DispatchOfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
 }
 
 // ============ USUARIOS Y SEGURIDAD ============
@@ -114,6 +128,8 @@ model WorkOrder {
   scheduledDate   DateTime?
   scheduledStart  DateTime?
   scheduledEnd    DateTime?
+  acceptedAt      DateTime?
+  arrivedAt       DateTime?
   startedAt       DateTime?
   completedAt     DateTime?
   cancelledAt     DateTime?
@@ -153,6 +169,9 @@ model WorkOrder {
   // Auditoría
   auditLogs       AuditLog[]
 
+  // Despacho (cascada / notificación abierta)
+  dispatchOffers  DispatchOffer[]
+
   // Ubicación
   latitude        Float?
   longitude       Float?
@@ -168,6 +187,26 @@ model WorkOrder {
   @@index([assignedToId])
   @@index([scheduledDate])
   @@map("work_orders")
+}
+
+model DispatchOffer {
+  id             String              @id @default(uuid())
+  orderId        String
+  order          WorkOrder           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  crewId         String
+  crew           Crew                @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  mode           DispatchMode
+  sequence       Int                 @default(0)
+  distanceMeters Float?
+  status         DispatchOfferStatus @default(PENDING)
+  offeredAt      DateTime            @default(now())
+  expiresAt      DateTime?
+  respondedAt    DateTime?
+  createdAt      DateTime            @default(now())
+
+  @@index([orderId, status])
+  @@index([crewId, status])
+  @@map("dispatch_offers")
 }
 
 model WorkOrderStatusHistory {
@@ -237,6 +276,8 @@ model Photo {
   label     String?
   latitude  Float?
   longitude Float?
+  mimeType  String?
+  size      Int?
   createdAt DateTime   @default(now())
 
   @@index([orderId])
@@ -251,6 +292,8 @@ model Signature {
   name      String?
   document  String?    // Tipo de documento
   documentNumber String?
+  mimeType  String?
+  size      Int?
   createdAt DateTime   @default(now())
 
   @@map("signatures")
@@ -278,6 +321,7 @@ model Crew {
   vehicle       Vehicle?
   inventory     Inventory[]
   workOrders    WorkOrder[]
+  dispatchOffers DispatchOffer[]
 
   @@index([status])
   @@index([zone])

@@ -1,5 +1,5 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
@@ -12,7 +12,12 @@ export class DashboardController {
 
   @Get()
   @ApiOperation({ summary: 'Obtener datos del dashboard ejecutivo' })
-  async getDashboard() {
-    return this.dashboardService.getDashboardData();
+  @ApiQuery({ name: 'recientes', required: false, type: Number })
+  @ApiQuery({ name: 'actividad', required: false, type: Number })
+  async getDashboard(
+    @Query('recientes') recientes?: number,
+    @Query('actividad') actividad?: number,
+  ) {
+    return this.dashboardService.getDashboardData({ recientes, actividad });
   }
 }

@@ -1,5 +1,10 @@
-// @ts-ignore: allow importing @nestjs/common in environments where its types aren't available
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  Prisma,
+  WorkOrderStatus,
+  WorkOrderPriority,
+  CrewStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 @Injectable()
@@ -8,106 +13,150 @@ export class DashboardService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async getDashboardData() {
+  async getDashboardData(queryParams: { recientes?: number; actividad?: number } = {}) {
+    const { recientes = 10, actividad = 20 } = queryParams;
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
     const [
       pendingOrders,
       inProgressOrders,
+      assignedAndAcceptedOrders,
       completedToday,
       overdueOrders,
       availableCrews,
       busyCrews,
+      offlineCrews,
       ordersByPriority,
       ordersByStatus,
       recentOrders,
       slaAlerts,
       activityTimeline,
     ] = await Promise.all([
-      // Órdenes pendientes
       this.prisma.workOrder.count({ where: { status: 'PENDING' } }),
-      // Órdenes en progreso
       this.prisma.workOrder.count({ where: { status: 'IN_PROGRESS' } }),
-      // Completadas hoy
+      this.prisma.workOrder.count({
+        where: { status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+      }),
       this.prisma.workOrder.count({
         where: {
           status: 'COMPLETED',
-          completedAt: { gte: todayStart, lt: todayEnd },
+          completedAt: { gte: todayStart },
         },
       }),
-      // Vencidas
       this.prisma.workOrder.count({
         where: {
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
-          scheduledDate: { lt: now },
+          scheduledEnd: { lt: now },
         },
       }),
-      // Cuadrillas disponibles
       this.prisma.crew.count({ where: { status: 'AVAILABLE' } }),
-      // Cuadrillas ocupadas
       this.prisma.crew.count({ where: { status: 'BUSY' } }),
-      // Órdenes por prioridad
+      this.prisma.crew.count({
+        where: { status: { in: ['OFFLINE', 'ON_BREAK'] } },
+      }),
       this.prisma.workOrder.groupBy({
         by: ['priority'],
-        _count: true,
         where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        _count: { id: true },
       }),
-      // Órdenes por estado
       this.prisma.workOrder.groupBy({
         by: ['status'],
-        _count: true,
+        _count: { id: true },
       }),
-      // Órdenes recientes
       this.prisma.workOrder.findMany({
-        take: 10,
+        take: recientes,
         orderBy: { createdAt: 'desc' },
         include: {
-          customer: { select: { firstName: true, lastName: true } },
-          crew: { select: { name: true } },
+          customer: { select: { id: true, firstName: true, lastName: true } },
+          crew: { select: { id: true, name: true } },
         },
       }),
-      // Alertas SLA
       this.prisma.workOrder.findMany({
         where: {
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
           slaId: { not: null },
-          scheduledDate: { lte: new Date(now.getTime() + 2 * 60 * 60 * 1000) },
         },
-        take: 10,
         include: {
           sla: true,
-          customer: { select: { firstName: true, lastName: true } },
+          customer: { select: { id: true, firstName: true, lastName: true } },
         },
-        orderBy: { scheduledDate: 'asc' },
       }),
-      // Timeline de actividad
       this.prisma.timelineEntry.findMany({
-        take: 20,
+        take: actividad,
         orderBy: { createdAt: 'desc' },
         include: {
-          order: { select: { orderNumber: true, title: true } },
+          order: { select: { id: true, orderNumber: true, title: true } },
         },
       }),
     ]);
 
+    // Mapeo de tarjetas
+    const tarjetas = {
+      ordenes_pendientes: pendingOrders,
+      ordenes_en_proceso: inProgressOrders,
+      ordenes_asignadas: assignedAndAcceptedOrders,
+      completadas_hoy: completedToday,
+      ordenes_vencidas: overdueOrders,
+      cuadrillas_disponibles: availableCrews,
+      cuadrillas_ocupadas: busyCrews,
+      cuadrillas_fuera_servicio: offlineCrews,
+    };
+
+    // Mapeo de gráficos
+    const orderStatusMap: Record<WorkOrderStatus, number> = Object.values(
+      WorkOrderStatus,
+    ).reduce((acc, status) => ({ ...acc, [status]: 0 }), {} as Record<WorkOrderStatus, number>);
+    ordersByStatus.forEach((item) => {
+      orderStatusMap[item.status] = item._count.id;
+    });
+
+    const graficos = {
+      ordenes_por_prioridad: ordersByPriority.map((item) => ({
+        prioridad: item.priority.toLowerCase(),
+        cantidad: item._count.id,
+      })),
+      ordenes_por_estado: Object.entries(orderStatusMap).map(([estado, cantidad]) => ({
+        estado: estado.toLowerCase(),
+        cantidad,
+      })),
+    };
+
+    // Mapeo de órdenes recientes
+    const mappedRecentOrders = recentOrders.map((order) => ({
+      ...order,
+      cliente: order.customer
+        ? {
+            id: order.customer.id,
+            nombre: `${order.customer.firstName} ${order.customer.lastName}`,
+          }
+        : null,
+      cuadrilla: order.crew
+        ? { id: order.crew.id, nombre: order.crew.name }
+        : null,
+    }));
+
+    // Mapeo de alertas SLA
+    const mappedSlaAlerts = slaAlerts
+      .map((order) => {
+        const slaVencimiento = new Date(order.createdAt.getTime() + order.sla!.resolveTime * 60000);
+        const minutosRestantes = Math.round((slaVencimiento.getTime() - now.getTime()) / 60000);
+        return {
+          ...order,
+          minutos_restantes: minutosRestantes,
+          vencida: minutosRestantes < 0,
+          sla_vencimiento: slaVencimiento,
+        };
+      })
+      .sort((a, b) => a.minutos_restantes - b.minutos_restantes);
+
     return {
-      cards: {
-        pendingOrders,
-        inProgressOrders,
-        completedToday,
-        overdueOrders,
-        availableCrews,
-        busyCrews,
-      },
-      charts: {
-        ordersByPriority,
-        ordersByStatus,
-      },
-      recentOrders,
-      slaAlerts,
-      activityTimeline,
+      tarjetas,
+      graficos,
+      ordenes_recientes: mappedRecentOrders,
+      alertas_sla: mappedSlaAlerts,
+      actividad: activityTimeline,
+      generado_en: now.toISOString(),
     };
   }
 }

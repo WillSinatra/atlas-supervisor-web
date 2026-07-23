@@ -1,103 +1,158 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowLeft,
-  MapPin,
-  Clock,
-  CheckCircle2,
-  Circle,
-  Camera,
-  PenTool,
-  ClipboardCheck,
-  Navigation,
-  Pencil,
-} from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Navigation, Pencil } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { Modal } from '@/shared/components/ui/Modal';
-import { Input } from '@/shared/components/ui/Input';
-import { Select } from '@/shared/components/ui/Select';
-import { getOrderById, assignOrderToCrew, updateOrder, type OrderEditableFields } from '@/shared/services/ordersService';
-import { getCrews } from '@/shared/services/crewsService';
-import { getOrderTypeFields } from '@/shared/services/mocks/orderTypeFields.mock';
-import { typeLabels } from '@/shared/services/mocks/orders.mock';
-import { statusLabels, statusBadgeVariant, priorityLabels, priorityBadgeVariant } from '@/shared/constants/orderStatus';
-import { crewStatusLabels, crewStatusBadgeVariant } from '@/shared/constants/crewStatus';
+import { ordenesApi, clientesApi, cuadrillasApi, mensajeDeError } from '@/shared/services/api';
 import { haversineDistanceKm } from '@/shared/utils/geo';
-import { formatSlaRemaining, getSlaState } from '@/shared/utils/sla';
+import {
+  estadoOrdenLabels,
+  estadoOrdenBadgeVariant,
+  prioridadLabels,
+  prioridadBadgeVariant,
+  tipoOrdenLabels,
+  fallaLabels,
+  estadoCuadrillaLabels,
+  estadoCuadrillaBadgeVariant,
+} from '@/shared/constants/ordenLabels';
+import type { TipoOrden, Falla } from '@/shared/constants/ordenLabels';
+import { OrdenCamposComunes, type CamposComunesValues } from '@/modules/orders/components/OrdenCamposComunes';
+import type { EditarOrdenInput, Orden } from '@/types/atlas';
+
+const eventoLabels: Record<string, string> = {
+  creada: 'Orden creada',
+  actualizada: 'Datos actualizados',
+  asignada: 'Asignada a cuadrilla',
+};
+
+// La orden termina su ciclo de vida en estos estados: ya no acepta cambios desde el panel.
+const ESTADOS_BLOQUEADOS = ['completada', 'cancelada'];
+
+function isoAInputLocal(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function valoresDesdeOrden(orden: Orden): CamposComunesValues {
+  return {
+    titulo: orden.titulo ?? '',
+    descripcion: orden.descripcion ?? '',
+    prioridad: orden.prioridad,
+    falla: (orden.falla as Falla) ?? '',
+    sla_id: orden.sla_id ?? '',
+    fecha_programada: isoAInputLocal(orden.fecha_programada),
+  };
+}
+
+// Solo los campos que cambiaron respecto a la orden original, en el shape que espera el PATCH.
+function calcularDiff(original: CamposComunesValues, actual: CamposComunesValues): EditarOrdenInput {
+  const diff: EditarOrdenInput = {};
+  if (actual.titulo !== original.titulo) diff.titulo = actual.titulo;
+  if (actual.descripcion !== original.descripcion) diff.descripcion = actual.descripcion;
+  if (actual.prioridad !== original.prioridad) diff.prioridad = actual.prioridad || undefined;
+  if (actual.falla !== original.falla) diff.falla = actual.falla || undefined;
+  if (actual.sla_id !== original.sla_id) diff.sla_id = actual.sla_id || undefined;
+  if (actual.fecha_programada !== original.fecha_programada) {
+    diff.fecha_programada = actual.fecha_programada ? new Date(actual.fecha_programada).toISOString() : undefined;
+  }
+  return diff;
+}
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: order, isLoading } = useQuery({
-    queryKey: ['order', id],
-    queryFn: () => getOrderById(id!),
+  const { data: orden, isLoading, isError, error } = useQuery({
+    queryKey: ['orden', id],
+    queryFn: () => ordenesApi.detalle(id!),
     enabled: !!id,
   });
 
-  const { data: crewsData } = useQuery({
-    queryKey: ['crews', 'assignment-candidates'],
-    queryFn: () => getCrews({ limit: 100 }),
+  const { data: cliente } = useQuery({
+    queryKey: ['cliente', orden?.cliente_id],
+    queryFn: () => clientesApi.detalle(orden!.cliente_id),
+    enabled: !!orden?.cliente_id,
+  });
+
+  const { data: cuadrillasData } = useQuery({
+    queryKey: ['cuadrillas', 'asignacion'],
+    queryFn: () => cuadrillasApi.listar(),
   });
 
   const assignMutation = useMutation({
-    mutationFn: (crewId: string) => {
-      const crew = crewsData?.data.find((c) => c.id === crewId);
-      return assignOrderToCrew(id!, crewId, crew?.name ?? '');
-    },
+    mutationFn: (cuadrillaId: string) => ordenesApi.asignar(id!, cuadrillaId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['order', id] });
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orden', id] });
+      queryClient.invalidateQueries({ queryKey: ['ordenes'] });
     },
   });
 
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState<OrderEditableFields | null>(null);
+  const [editOriginal, setEditOriginal] = useState<CamposComunesValues | null>(null);
+  const [editForm, setEditForm] = useState<CamposComunesValues | null>(null);
 
   const editMutation = useMutation({
-    mutationFn: (patch: OrderEditableFields) => updateOrder(id!, patch),
+    mutationFn: (patch: EditarOrdenInput) => ordenesApi.actualizar(id!, patch),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['order', id] });
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orden', id] });
+      queryClient.invalidateQueries({ queryKey: ['ordenes'] });
       setEditOpen(false);
     },
   });
 
+  const edicionBloqueada = orden ? ESTADOS_BLOQUEADOS.includes(orden.estado) : false;
+
   const openEdit = () => {
-    if (!order) return;
-    setEditForm({ title: order.title, priority: order.priority, description: order.description, notes: order.notes });
+    if (!orden || edicionBloqueada) return;
+    const valores = valoresDesdeOrden(orden);
+    setEditOriginal(valores);
+    setEditForm(valores);
+    editMutation.reset();
     setEditOpen(true);
   };
 
-  const candidateCrews = useMemo(() => {
-    if (!order || !crewsData) return [];
-    const orderLat = order.latitude;
-    const orderLng = order.longitude;
-    return [...crewsData.data]
-      .map((crew) => ({
-        crew,
+  const diff = editOriginal && editForm ? calcularDiff(editOriginal, editForm) : {};
+  const hayCambios = Object.keys(diff).length > 0;
+
+  const domicilio = useMemo(
+    () => cliente?.domicilios?.find((d) => d.id === orden?.domicilio_id),
+    [cliente, orden],
+  );
+
+  const candidateCuadrillas = useMemo(() => {
+    if (!cuadrillasData) return [];
+    return [...cuadrillasData.data]
+      .map((cuadrilla) => ({
+        cuadrilla,
         distanceKm:
-          orderLat != null && orderLng != null && crew.latitude != null && crew.longitude != null
-            ? haversineDistanceKm(orderLat, orderLng, crew.latitude, crew.longitude)
+          domicilio?.lat != null && domicilio?.lng != null && cuadrilla.ubicacion
+            ? haversineDistanceKm(domicilio.lat, domicilio.lng, cuadrilla.ubicacion.lat, cuadrilla.ubicacion.lng)
             : null,
       }))
       .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
-  }, [order, crewsData]);
+  }, [cuadrillasData, domicilio]);
 
-  if (isLoading || !order) {
+  if (isLoading || !orden) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-atlas-600" />
+        {isError ? (
+          <EmptyState
+            icon={<ArrowLeft className="w-8 h-8" />}
+            title="No se pudo cargar la orden"
+            description={mensajeDeError(error)}
+          />
+        ) : (
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-atlas-600" />
+        )}
       </div>
     );
   }
-
-  const hasEvidence = order.checklistItems.length > 0 || order.photos.length > 0 || !!order.signature;
-  const slaState = getSlaState(order);
 
   return (
     <div className="space-y-6">
@@ -109,8 +164,8 @@ export default function OrderDetailPage() {
           <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{order.orderNumber}</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{order.title}</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{orden.numero}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{orden.titulo ?? 'Sin título'}</p>
         </div>
       </div>
 
@@ -120,127 +175,65 @@ export default function OrderDetailPage() {
           <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Datos generales</h3>
-              <Button variant="ghost" size="sm" icon={<Pencil className="w-3.5 h-3.5" />} onClick={openEdit}>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Pencil className="w-3.5 h-3.5" />}
+                onClick={openEdit}
+                disabled={edicionBloqueada}
+                title={
+                  edicionBloqueada
+                    ? `No se puede editar una orden ${estadoOrdenLabels[orden.estado].toLowerCase()}.`
+                    : undefined
+                }
+              >
                 Editar
               </Button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <Field label="Tipo" value={typeLabels[order.type]} />
-              <Field label="Estado" value={<Badge variant={statusBadgeVariant[order.status]}>{statusLabels[order.status]}</Badge>} />
-              <Field label="Prioridad" value={<Badge variant={priorityBadgeVariant[order.priority]}>{priorityLabels[order.priority]}</Badge>} />
-              <Field label="Cliente" value={`${order.customer?.firstName} ${order.customer?.lastName}`} />
+              <Field label="Tipo" value={tipoOrdenLabels[orden.tipo as TipoOrden] ?? orden.tipo} />
+              <Field label="Estado" value={<Badge variant={estadoOrdenBadgeVariant[orden.estado]}>{estadoOrdenLabels[orden.estado]}</Badge>} />
+              <Field label="Prioridad" value={<Badge variant={prioridadBadgeVariant[orden.prioridad]}>{prioridadLabels[orden.prioridad]}</Badge>} />
+              <Field label="Cliente" value={cliente?.nombre ?? orden.cliente_id} />
+              <Field label="Domicilio" value={domicilio?.direccion ?? '—'} />
               <Field
-                label="Domicilio"
-                value={order.address ? `${order.address.street} ${order.address.number ?? ''}, ${order.address.city}` : '—'}
+                label="Fecha programada"
+                value={orden.fecha_programada ? new Date(orden.fecha_programada).toLocaleString('es-AR') : '—'}
               />
-              <Field
-                label="SLA restante"
-                value={
-                  <span className={slaState === 'overdue' ? 'text-red-600 dark:text-red-400 font-medium' : slaState === 'dueSoon' ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
-                    {formatSlaRemaining(order)}
-                  </span>
-                }
-              />
+              {orden.tipo === 'reparacion' && (
+                <Field label="Falla" value={orden.falla ? (fallaLabels[orden.falla as Falla] ?? orden.falla) : '—'} />
+              )}
+              <Field label="Origen" value={orden.origen === 'manual' ? 'Manual (panel)' : orden.origen} />
             </div>
-            {order.notes && (
+            {orden.descripcion && (
               <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Notas</p>
-                <p className="text-sm text-slate-700 dark:text-slate-300 mt-0.5">{order.notes}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Descripción</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300 mt-0.5">{orden.descripcion}</p>
               </div>
             )}
-          </div>
-
-          {/* Campos específicos del tipo */}
-          <div className="card p-5">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Datos de {typeLabels[order.type].toLowerCase()}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {getOrderTypeFields(order).map((f) => (
-                <Field key={f.label} label={f.label} value={f.value} />
-              ))}
-            </div>
           </div>
 
           {/* Línea de tiempo */}
           <div className="card p-5">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Línea de tiempo</h3>
             <ol className="space-y-4">
-              {order.timeline.map((entry, idx) => (
-                <li key={entry.id} className="relative pl-6">
-                  {idx < order.timeline.length - 1 && (
+              {orden.linea_tiempo.map((entry, idx) => (
+                <li key={`${entry.tipo_evento}-${entry.creado_en}`} className="relative pl-6">
+                  {idx < orden.linea_tiempo.length - 1 && (
                     <span className="absolute left-[5px] top-4 bottom-[-16px] w-px bg-slate-200 dark:bg-slate-700" />
                   )}
                   <span className="absolute left-0 top-1 w-2.5 h-2.5 rounded-full bg-atlas-600" />
-                  <p className="text-sm font-medium text-slate-900 dark:text-white">{entry.title}</p>
-                  {entry.description && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{entry.description}</p>}
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">
+                    {eventoLabels[entry.tipo_evento] ?? entry.tipo_evento}
+                  </p>
+                  {entry.descripcion && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{entry.descripcion}</p>}
                   <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
                     <Clock className="w-3 h-3" />
-                    {new Date(entry.createdAt).toLocaleString('es-AR')}
+                    {new Date(entry.creado_en).toLocaleString('es-AR')}
                   </p>
                 </li>
               ))}
             </ol>
-          </div>
-
-          {/* Evidencia */}
-          <div className="card p-5">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Evidencia</h3>
-            {!hasEvidence ? (
-              <EmptyState
-                icon={<Camera className="w-8 h-8" />}
-                title="Sin evidencia cargada"
-                description="El técnico todavía no subió fotos, firma ni checklist desde la app móvil."
-              />
-            ) : (
-              <div className="space-y-5">
-                {order.checklistItems.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <ClipboardCheck className="w-3.5 h-3.5" /> Checklist
-                    </p>
-                    <ul className="space-y-1.5">
-                      {order.checklistItems.map((item) => (
-                        <li key={item.id} className="flex items-center gap-2 text-sm">
-                          {item.completed ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                          ) : (
-                            <Circle className="w-4 h-4 text-slate-300 dark:text-slate-600 flex-shrink-0" />
-                          )}
-                          <span className={item.completed ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'}>{item.label}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {order.photos.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <Camera className="w-3.5 h-3.5" /> Fotos
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {order.photos.map((photo) => (
-                        <div key={photo.id} className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                          <img src={photo.thumbnail ?? photo.url} alt={photo.label ?? 'Evidencia'} className="w-full h-24 object-cover" />
-                          {photo.label && <p className="text-xs text-slate-500 px-2 py-1 truncate">{photo.label}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {order.signature && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <PenTool className="w-3.5 h-3.5" /> Firma del cliente
-                    </p>
-                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 inline-block bg-white">
-                      <img src={order.signature.url} alt="Firma" className="h-16" />
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">{order.signature.name}</p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -249,22 +242,24 @@ export default function OrderDetailPage() {
           <div className="card p-5">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">Asignación</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              {order.crew ? `Asignada a ${order.crew.name}` : 'Sin cuadrilla asignada'}
+              {orden.cuadrilla_id
+                ? `Asignada a ${cuadrillasData?.data.find((c) => c.id === orden.cuadrilla_id)?.nombre ?? orden.cuadrilla_id}`
+                : 'Sin cuadrilla asignada'}
             </p>
 
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
               Cuadrillas candidatas por cercanía
             </p>
             <div className="space-y-2">
-              {candidateCrews.map(({ crew, distanceKm }) => (
+              {candidateCuadrillas.map(({ cuadrilla, distanceKm }) => (
                 <div
-                  key={crew.id}
+                  key={cuadrilla.id}
                   className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">{crew.name}</p>
+                    <p className="text-sm font-medium text-slate-900 dark:text-white">{cuadrilla.nombre}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <Badge variant={crewStatusBadgeVariant[crew.status]}>{crewStatusLabels[crew.status]}</Badge>
+                      <Badge variant={estadoCuadrillaBadgeVariant[cuadrilla.estado]}>{estadoCuadrillaLabels[cuadrilla.estado]}</Badge>
                       {distanceKm != null && (
                         <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                           <Navigation className="w-3 h-3" /> {distanceKm.toFixed(1)} km
@@ -275,27 +270,21 @@ export default function OrderDetailPage() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={crew.id === order.crewId || crew.status !== 'disponible' || assignMutation.isPending}
-                    loading={assignMutation.isPending && assignMutation.variables === crew.id}
-                    onClick={() => assignMutation.mutate(crew.id)}
+                    disabled={cuadrilla.id === orden.cuadrilla_id || cuadrilla.estado !== 'disponible' || assignMutation.isPending}
+                    loading={assignMutation.isPending && assignMutation.variables === cuadrilla.id}
+                    onClick={() => assignMutation.mutate(cuadrilla.id)}
                   >
-                    {crew.id === order.crewId ? 'Asignada' : 'Asignar'}
+                    {cuadrilla.id === orden.cuadrilla_id ? 'Asignada' : 'Asignar'}
                   </Button>
                 </div>
               ))}
+              {candidateCuadrillas.length === 0 && (
+                <p className="text-xs text-slate-400">No hay cuadrillas cargadas.</p>
+              )}
             </div>
-
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
-                Propuesta con cascada
-              </p>
-              <Button variant="outline" size="sm" disabled className="w-full">
-                Próximamente
-              </Button>
-              <p className="text-xs text-slate-400 mt-2">
-                Envía la OT a varias cuadrillas en simultáneo y asigna a la primera que acepte.
-              </p>
-            </div>
+            {assignMutation.isError && (
+              <p className="text-xs text-red-600 dark:text-red-400 mt-2">{mensajeDeError(assignMutation.error)}</p>
+            )}
           </div>
 
           <div className="card p-5">
@@ -315,36 +304,23 @@ export default function OrderDetailPage() {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              editMutation.mutate(editForm);
+              if (!hayCambios) return;
+              editMutation.mutate(diff);
             }}
           >
-            <Input
-              label="Título"
-              value={editForm.title}
-              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-              required
+            <OrdenCamposComunes
+              values={editForm}
+              onChange={(key, value) => setEditForm({ ...editForm, [key]: value })}
+              mostrarFalla={orden.tipo === 'reparacion'}
             />
-            <Select
-              label="Prioridad"
-              value={editForm.priority}
-              options={Object.entries(priorityLabels).map(([value, label]) => ({ value, label }))}
-              onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as OrderEditableFields['priority'] })}
-            />
-            <Input
-              label="Descripción"
-              value={editForm.description ?? ''}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-            />
-            <Input
-              label="Notas"
-              value={editForm.notes ?? ''}
-              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-            />
+            {editMutation.isError && (
+              <p className="text-xs text-red-600 dark:text-red-400">{mensajeDeError(editMutation.error)}</p>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={() => setEditOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" loading={editMutation.isPending}>
+              <Button type="submit" loading={editMutation.isPending} disabled={!hayCambios}>
                 Guardar cambios
               </Button>
             </div>

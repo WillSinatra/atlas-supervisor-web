@@ -45,12 +45,7 @@ export class ReportsController {
 
   @Get('materials')
   @ApiOperation({ summary: 'Uso de materiales' })
-  @ApiQuery({ name: 'dateFrom', required: false })
-  @ApiQuery({ name: 'dateTo', required: false })
-  async getMaterialUsage(
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-  ) {
-    return this.reportsService.getMaterialUsage({ dateFrom, dateTo });
+  async getMaterialUsage() {
+    return this.reportsService.getMaterialUsage();
   }
 }
