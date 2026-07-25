@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Map, AlertTriangle, Search } from 'lucide-react';
+import { Table, Map, AlertTriangle, Search, Plus } from 'lucide-react';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from '@/shared/components/ui/Badge';
@@ -12,12 +12,14 @@ import { getCrews } from '@/shared/services/crewsService';
 import { typeLabels } from '@/shared/services/mocks/orders.mock';
 import { getSlaState, formatSlaRemaining } from '@/shared/utils/sla';
 import { statusLabels, statusBadgeVariant } from '@/shared/constants/orderStatus';
+import { CreateTicketModal } from '../components/CreateTicketModal';
 import type { WorkOrder, WorkOrderStatus, WorkOrderType } from '@/types';
 
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
   const [filters, setFilters] = useState<OrdersFilters>({});
+  const [createTicketOpen, setCreateTicketOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['orders', filters],
@@ -49,31 +51,41 @@ export default function OrdersPage() {
             Gestione y monitoree todas las órdenes de trabajo
           </p>
         </div>
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-700">
-          <button
-            onClick={() => setViewMode('table')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              viewMode === 'table'
-                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                : 'text-slate-500 dark:text-slate-400'
-            }`}
-          >
-            <Table className="w-4 h-4" />
-            Tabla
-          </button>
-          <button
-            onClick={() => setViewMode('map')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              viewMode === 'map'
-                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                : 'text-slate-500 dark:text-slate-400'
-            }`}
-          >
-            <Map className="w-4 h-4" />
-            Mapa
-          </button>
+        <div className="flex items-center gap-3">
+          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateTicketOpen(true)}>
+            Crear Ticket
+            <Badge variant="info" className="ml-1">
+              Beta
+            </Badge>
+          </Button>
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-700">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              <Table className="w-4 h-4" />
+              Tabla
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                viewMode === 'map'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              <Map className="w-4 h-4" />
+              Mapa
+            </button>
+          </div>
         </div>
       </div>
+
+      <CreateTicketModal open={createTicketOpen} onClose={() => setCreateTicketOpen(false)} />
 
       {/* Filtros */}
       <div className="card p-4">

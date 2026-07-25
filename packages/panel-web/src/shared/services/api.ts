@@ -9,6 +9,9 @@ import type {
   Usuario,
   Archivo,
   EventoOrden,
+  Tecnico,
+  Vehiculo,
+  TicketBeta,
 } from '../../types/atlas';
 
 /**
@@ -257,6 +260,19 @@ export const ordenesApi = {
   },
 };
 
+// ------------------------------------------------------------ tickets beta ---
+
+export const ticketsBetaApi = {
+  async crear(payload: Partial<TicketBeta>) {
+    const { data } = await api.post<TicketBeta>("/v1/tickets-beta", payload);
+    return data;
+  },
+  async listar(params?: Record<string, string | number>) {
+    const { data } = await api.get<RespuestaPaginada<TicketBeta>>("/v1/tickets-beta", { params });
+    return data;
+  },
+};
+
 // --------------------------------------------------------------- archivos ---
 
 export const archivosApi = {
@@ -360,12 +376,30 @@ export const cuadrillasApi = {
     const { data } = await api.post<Cuadrilla>('/v1/cuadrillas', payload);
     return data;
   },
-  async actualizar(id: string, payload: Partial<Cuadrilla>) {
+  // El backend real solo acepta estos 4 campos en el PATCH; codigo/especialidad/zona
+  // (Pedido 4 a Cristian, sin arrancar) tiran 400 si se incluyen, aunque no cambien.
+  async actualizar(id: string, payload: Partial<Pick<Cuadrilla, 'nombre' | 'estado' | 'lat' | 'lng'>>) {
     const { data } = await api.patch<Cuadrilla>(`/v1/cuadrillas/${id}`, payload);
     return data;
   },
   async eliminar(id: string) {
     const { data } = await api.delete<{ id: string; eliminado: boolean }>(`/v1/cuadrillas/${id}`);
+    return data;
+  },
+  async agregarTecnico(cuadrillaId: string, payload: { nombre: string; telefono?: string }) {
+    const { data } = await api.post<Tecnico>(`/v1/cuadrillas/${cuadrillaId}/tecnicos`, payload);
+    return data;
+  },
+  async actualizarTecnico(id: string, payload: Partial<Pick<Tecnico, "nombre" | "telefono" | "estado">>) {
+    const { data } = await api.patch<Tecnico>(`/v1/tecnicos/${id}`, payload);
+    return data;
+  },
+  async eliminarTecnico(id: string) {
+    const { data } = await api.delete<{ id: string; eliminado: boolean }>(`/v1/tecnicos/${id}`);
+    return data;
+  },
+  async actualizarVehiculo(cuadrillaId: string, payload: Partial<Omit<Vehiculo, "id" | "cuadrilla_id">>) {
+    const { data } = await api.patch<Vehiculo>(`/v1/cuadrillas/${cuadrillaId}/vehiculo`, payload);
     return data;
   },
 };

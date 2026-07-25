@@ -3,6 +3,7 @@ import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { useTheme } from '@/shared/contexts/ThemeContext';
+import { useBreadcrumbStore } from '@/shared/stores/breadcrumbStore';
 import { cn } from '@/shared/utils/cn';
 import { Logo } from '@/shared/components/Logo';
 import NotificationsDropdown from '@/shared/components/NotificationsDropdown';
@@ -35,6 +36,16 @@ const navigation = [
   { name: 'Configuración', href: '/settings', icon: Settings },
 ];
 
+// Etiqueta en español para el primer segmento de cada módulo en el breadcrumb.
+const etiquetasSegmento: Record<string, string> = {
+  dashboard: 'Dashboard',
+  orders: 'Órdenes de Trabajo',
+  crews: 'Cuadrillas',
+  customers: 'Clientes',
+  reports: 'Reportes',
+  settings: 'Configuración',
+};
+
 export default function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -44,6 +55,7 @@ export default function DashboardLayout() {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const breadcrumbLabels = useBreadcrumbStore((state) => state.labels);
 
   const handleLogout = async () => {
     await logout();
@@ -54,11 +66,14 @@ export default function DashboardLayout() {
     const paths = location.pathname.split('/').filter(Boolean);
     return [
       { name: 'Inicio', href: '/dashboard', icon: Home },
-      ...paths.map((path, index) => ({
-        name: path.charAt(0).toUpperCase() + path.slice(1),
-        href: `/${paths.slice(0, index + 1).join('/')}`,
-        icon: undefined,
-      })),
+      ...paths.map((path, index) => {
+        const href = `/${paths.slice(0, index + 1).join('/')}`;
+        const etiqueta =
+          breadcrumbLabels[href] ??
+          etiquetasSegmento[path] ??
+          path.charAt(0).toUpperCase() + path.slice(1);
+        return { name: etiqueta, href, icon: undefined };
+      }),
     ];
   };
 

@@ -1,27 +1,25 @@
-/**
- * Atlas API — tipos del contrato (en español).
- * Ubicación sugerida: src/types/atlas.ts
- */
+// Atlas API - tipos del contrato (en español).
+// Ubicación sugerida: src/types/atlas.ts
 
 // ------------------------------------------------------------ enumerados ---
 
 export type EstadoOrden =
-  | 'pendiente'
-  | 'asignada'
-  | 'aceptada'
-  | 'en_proceso'
-  | 'completada'
-  | 'cancelada';
+  | "pendiente"
+  | "asignada"
+  | "aceptada"
+  | "en_proceso"
+  | "completada"
+  | "cancelada";
 
-export type PrioridadOrden = 'baja' | 'media' | 'alta' | 'critica';
+export type PrioridadOrden = "baja" | "media" | "alta" | "critica";
 
-export type EstadoCuadrilla = 'disponible' | 'ocupada' | 'fuera_de_servicio';
+export type EstadoCuadrilla = "disponible" | "ocupada" | "fuera_de_servicio";
 
-export type RolUsuario = 'admin' | 'planificador' | 'despachador' | 'tecnico' | 'operador';
+export type RolUsuario = "admin" | "planificador" | "despachador" | "tecnico" | "operador";
 
-export type TipoArchivo = 'firma' | 'foto' | 'foto_antes' | 'foto_despues';
+export type TipoArchivo = "firma" | "foto" | "foto_antes" | "foto_despues";
 
-/** Fecha ISO 8601 en UTC, p. ej. "2026-07-18T13:53:25Z". */
+// Fecha ISO 8601 en UTC, p. ej. 2026-07-18T13:53:25Z
 export type FechaIso = string;
 
 export interface ReferenciaBasica {
@@ -33,7 +31,7 @@ export interface ReferenciaBasica {
 
 export interface Orden {
   id: string;
-  /** Número legible autogenerado: "OT-000001" */
+  // Número legible autogenerado: OT-000001
   numero: string;
   titulo: string | null;
   tipo: string;
@@ -84,7 +82,7 @@ export interface Cliente {
   email: string | null;
   creado_en: FechaIso;
   actualizado_en: FechaIso;
-  /** Presente en detalle y al crear */
+  // Presente en detalle y al crear
   domicilios?: Domicilio[];
 }
 
@@ -97,6 +95,32 @@ export interface Cuadrilla {
   ubicacion_actualizada_en: FechaIso | null;
   creado_en: FechaIso;
   actualizado_en: FechaIso;
+  codigo?: string | null;
+  especialidad?: string | null;
+  zona?: string | null;
+  // Presente en el detalle
+  tecnicos?: Tecnico[];
+  vehiculo?: Vehiculo | null;
+}
+
+export type EstadoTecnico = "activo" | "inactivo";
+
+export interface Tecnico {
+  id: string;
+  cuadrilla_id: string;
+  nombre: string;
+  telefono: string | null;
+  estado: EstadoTecnico;
+}
+
+export interface Vehiculo {
+  id: string;
+  cuadrilla_id: string;
+  marca: string | null;
+  modelo: string | null;
+  patente: string | null;
+  anio: number | null;
+  color: string | null;
 }
 
 export interface Usuario {
@@ -117,7 +141,7 @@ export interface Archivo {
   nombre_original?: string | null;
   mime: string;
   tamano: number;
-  /** Ruta relativa de la API: "/v1/archivos/{id}" */
+  // Ruta relativa de la API: /v1/archivos/{id}
   url: string;
   creado_en: FechaIso;
 }
@@ -126,11 +150,36 @@ export interface Sla {
   id: string;
   nombre: string;
   descripcion: string | null;
-  /** Minutos */
+  // Minutos
   tiempo_resolucion: number;
   tiempo_respuesta: number | null;
   prioridad: PrioridadOrden | null;
   activo: boolean;
+}
+
+// ------------------------------------------------------------------ beta ---
+
+// Ticket beta - pestaña "Datos" del modal Crear Ticket.
+// Va a POST /v1/tickets-beta. Endpoint todavía no publicado por backend.
+export interface TicketBeta {
+  id: string;
+  cliente: string;
+  telefono: string | null;
+  direccion: string;
+  zona: string | null;
+  posicion: string | null;
+  tipo: string;
+  cuadrilla_id: string;
+  prioridad: PrioridadOrden;
+  estado: string | null;
+  fecha_visita: FechaIso | null;
+  hora: string | null;
+  caja: string | null;
+  precinto: string | null;
+  sn: string | null;
+  url_mapa: string | null;
+  descripcion: string | null;
+  creado_en: FechaIso;
 }
 
 // ------------------------------------------------------------- dashboard ---
@@ -138,10 +187,10 @@ export interface Sla {
 export interface DashboardTarjetas {
   ordenes_pendientes: number;
   ordenes_en_proceso: number;
-  /** asignada + aceptada */
+  // asignada + aceptada
   ordenes_asignadas: number;
   completadas_hoy: number;
-  /** Abiertas cuya fecha_programada ya pasó */
+  // Abiertas cuya fecha_programada ya pasó
   ordenes_vencidas: number;
   cuadrillas_disponibles: number;
   cuadrillas_ocupadas: number;
@@ -159,9 +208,9 @@ export interface ConteoPorEstado {
 }
 
 export interface DashboardGraficos {
-  /** Siempre las 4 prioridades, incluso en cero. Solo OT abiertas. */
+  // Siempre las 4 prioridades, incluso en cero. Solo OT abiertas.
   ordenes_por_prioridad: ConteoPorPrioridad[];
-  /** Siempre los 6 estados, incluso en cero. Todas las OT. */
+  // Siempre los 6 estados, incluso en cero. Todas las OT.
   ordenes_por_estado: ConteoPorEstado[];
 }
 
@@ -175,7 +224,7 @@ export interface OrdenReciente {
   creado_en: FechaIso;
   fecha_programada: FechaIso | null;
   cliente: ReferenciaBasica;
-  /** null cuando todavía no tiene cuadrilla asignada */
+  // null cuando todavía no tiene cuadrilla asignada
   cuadrilla: ReferenciaBasica | null;
 }
 
@@ -192,7 +241,7 @@ export interface AlertaSla {
   estado: EstadoOrden;
   prioridad: PrioridadOrden;
   fecha_programada: FechaIso;
-  /** Negativo si el compromiso ya venció */
+  // Negativo si el compromiso ya venció
   minutos_restantes: number;
   vencida: boolean;
   sla: SlaResumen;
@@ -223,38 +272,36 @@ export interface DashboardData {
 // ------------------------------------------------------ presentación UI ---
 
 export const coloresEstado: Record<EstadoOrden, string> = {
-  pendiente: 'bg-slate-400',
-  asignada: 'bg-blue-500',
-  aceptada: 'bg-indigo-500',
-  en_proceso: 'bg-amber-500',
-  completada: 'bg-emerald-500',
-  cancelada: 'bg-red-500',
+  pendiente: "bg-slate-400",
+  asignada: "bg-blue-500",
+  aceptada: "bg-indigo-500",
+  en_proceso: "bg-amber-500",
+  completada: "bg-emerald-500",
+  cancelada: "bg-red-500",
 };
 
 export const etiquetasEstado: Record<EstadoOrden, string> = {
-  pendiente: 'Pendiente',
-  asignada: 'Asignada',
-  aceptada: 'Aceptada',
-  en_proceso: 'En proceso',
-  completada: 'Completada',
-  cancelada: 'Cancelada',
+  pendiente: "Pendiente",
+  asignada: "Asignada",
+  aceptada: "Aceptada",
+  en_proceso: "En proceso",
+  completada: "Completada",
+  cancelada: "Cancelada",
 };
 
 export const etiquetasPrioridad: Record<PrioridadOrden, string> = {
-  baja: 'Baja',
-  media: 'Media',
-  alta: 'Alta',
-  critica: 'Crítica',
+  baja: "Baja",
+  media: "Media",
+  alta: "Alta",
+  critica: "Crítica",
 };
 
-/**
- * Convierte los minutos que devuelve la alerta de SLA en un texto legible.
- * Negativo = ya venció.
- */
+// Convierte los minutos que devuelve la alerta de SLA en un texto legible.
+// Negativo = ya venció.
 export function textoVencimiento(minutos: number): string {
   const abs = Math.abs(minutos);
   const horas = Math.floor(abs / 60);
   const resto = abs % 60;
-  const lapso = horas > 0 ? `${horas} h ${resto} min` : `${resto} min`;
-  return minutos < 0 ? `Vencida hace ${lapso}` : `Vence en ${lapso}`;
+  const lapso = horas > 0 ? horas + " h " + resto + " min" : resto + " min";
+  return minutos < 0 ? "Vencida hace " + lapso : "Vence en " + lapso;
 }

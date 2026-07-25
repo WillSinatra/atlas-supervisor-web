@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user', JSON.stringify(userData));
         console.log('[AuthContext] La cuarta, response:', localStorage.getItem('user'));
-      setUser(userData);
+      // setUser(userData);
     } finally {
       setIsLoading(false);
     }
