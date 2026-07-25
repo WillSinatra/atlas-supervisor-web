@@ -1,20 +1,19 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import type { User } from '@/types';
-import { authApi } from '@/shared/services/api';
+import { authApi, type UsuarioSesion } from '@/shared/services/api';
 
 interface AuthContextType {
-  user: User | null;
+  user: UsuarioSesion | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateUser: (user: User) => void;
+  updateUser: (user: UsuarioSesion) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
+  const [user, setUser] = useState<UsuarioSesion | null>(() => {
     const stored = localStorage.getItem('user');
     return stored ? JSON.parse(stored) : null;
   });
@@ -50,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updateUser = useCallback((updatedUser: User) => {
+  const updateUser = useCallback((updatedUser: UsuarioSesion) => {
     localStorage.setItem('user', JSON.stringify(updatedUser));
     setUser(updatedUser);
   }, []);

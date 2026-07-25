@@ -149,15 +149,12 @@ export default function DashboardLayout() {
         <div className="p-3 border-t border-white/10">
           <div className={cn('flex items-center gap-3 px-3 py-2', sidebarCollapsed && 'justify-center')}>
             <div className="w-8 h-8 rounded-full bg-atlas-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-              {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+              {(user?.rol?.charAt(0) ?? 'U').toUpperCase()}
             </div>
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
-                  {user?.firstName} {user?.lastName}
-                </p>
-                <p className="text-xs text-slate-400 truncate">
-                  {user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'ADMIN' ? 'Admin' : 'Supervisor'}
+                  {user?.rol === 'admin' ? 'Admin' : user?.rol === 'planificador' ? 'Planificador' : user?.rol === 'despachador' ? 'Despachador' : user?.rol === 'tecnico' ? 'Técnico' : user?.rol === 'operador' ? 'Operador' : 'Usuario'}
                 </p>
               </div>
             )}
@@ -243,7 +240,7 @@ export default function DashboardLayout() {
                 className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
               >
                 <div className="w-8 h-8 rounded-full bg-atlas-600 flex items-center justify-center text-white text-sm font-medium">
-                  {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+                  {(user?.rol?.charAt(0) ?? 'U').toUpperCase()}
                 </div>
                 <ChevronDown className="w-4 h-4 text-slate-400 hidden sm:block" />
               </button>

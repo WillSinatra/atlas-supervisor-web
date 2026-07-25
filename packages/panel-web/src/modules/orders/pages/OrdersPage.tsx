@@ -1,46 +1,84 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Map, AlertTriangle, Search, Plus } from 'lucide-react';
+import { Table, Map as MapIcon, AlertTriangle, Search, Plus } from 'lucide-react';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
+import { Alert } from '@/shared/components/ui/Alert';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
-import { getOrders, type OrdersFilters } from '@/shared/services/ordersService';
-import { getCrews } from '@/shared/services/crewsService';
-import { typeLabels } from '@/shared/services/mocks/orders.mock';
-import { getSlaState, formatSlaRemaining } from '@/shared/utils/sla';
-import { statusLabels, statusBadgeVariant } from '@/shared/constants/orderStatus';
+import { ordenesApi, clientesApi, cuadrillasApi, mensajeDeError } from '@/shared/services/api';
+import { getOrdenSlaState, formatOrdenSlaRemaining } from '@/shared/utils/sla';
+import { etiquetasEstado } from '@/types/atlas';
+import type { Cliente, EstadoOrden, Orden } from '@/types/atlas';
 import { CreateTicketModal } from '../components/CreateTicketModal';
-import type { WorkOrder, WorkOrderStatus, WorkOrderType } from '@/types';
+
+type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+
+const variantEstadoOrden: Record<EstadoOrden, BadgeVariant> = {
+  pendiente: 'neutral',
+  asignada: 'info',
+  aceptada: 'info',
+  en_proceso: 'warning',
+  completada: 'success',
+  cancelada: 'danger',
+};
+
+// Filtros que el backend real acepta (GET /v1/ordenes). `search` y `prioridad`
+// no son parámetros soportados por la API, así que se aplican en cliente sobre
+// la página ya traída (ver más abajo).
+interface OrdersServerFilters {
+  estado?: EstadoOrden;
+  cuadrilla_id?: string;
+  tipo?: string;
+  fecha_desde?: string;
+}
 
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
-  const [filters, setFilters] = useState<OrdersFilters>({});
+  const [filters, setFilters] = useState<OrdersServerFilters>({});
+  const [search, setSearch] = useState('');
   const [createTicketOpen, setCreateTicketOpen] = useState(false);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['orders', filters],
-    queryFn: () => getOrders(filters),
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ['ordenes', filters],
+    queryFn: () => ordenesApi.listar(filters as Record<string, string>),
   });
 
-  const { data: crewsData } = useQuery({
-    queryKey: ['crews', 'filter-options'],
-    queryFn: () => getCrews({ limit: 100 }),
+  const { data: cuadrillasData } = useQuery({
+    queryKey: ['cuadrillas', 'filter-options'],
+    queryFn: () => cuadrillasApi.listar(),
   });
 
-  const orders = data?.data ?? [];
+  const cuadrillas = cuadrillasData?.data ?? [];
+  const cuadrillaNombrePorId = useMemo(
+    () => new Map(cuadrillas.map((c) => [c.id, c.nombre])),
+    [cuadrillas],
+  );
 
-  const setFilter = <K extends keyof OrdersFilters>(key: K, value: OrdersFilters[K]) => {
+  const setFilter = <K extends keyof OrdersServerFilters>(key: K, value: OrdersServerFilters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: value || undefined }));
   };
 
-  const crewOptions = useMemo(
-    () => (crewsData?.data ?? []).map((c) => ({ value: c.id, label: c.name })),
-    [crewsData],
-  );
+  // El backend no soporta filtro de texto libre ni de prioridad: se filtran acá
+  // los resultados de la página actual (no busca en todo el histórico).
+  const orders = useMemo(() => {
+    let result = data?.data ?? [];
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (o) => o.numero.toLowerCase().includes(q) || (o.titulo ?? '').toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [data, search]);
 
   return (
     <div className="space-y-6">
@@ -78,7 +116,7 @@ export default function OrdersPage() {
                   : 'text-slate-500 dark:text-slate-400'
               }`}
             >
-              <Map className="w-4 h-4" />
+              <MapIcon className="w-4 h-4" />
               Mapa
             </button>
           </div>
@@ -92,34 +130,33 @@ export default function OrdersPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <div className="lg:col-span-2">
             <Input
-              placeholder="Buscar por OT, título o cliente..."
+              placeholder="Buscar por OT o título..."
               leftIcon={<Search className="w-4 h-4 text-slate-400" />}
-              onChange={(e) => setFilter('search', e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <Select
             placeholder="Todos los estados"
-            options={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))}
-            onChange={(e) => setFilter('status', e.target.value as WorkOrderStatus)}
+            options={Object.entries(etiquetasEstado).map(([value, label]) => ({ value, label }))}
+            onChange={(e) => setFilter('estado', e.target.value as EstadoOrden)}
           />
-          <Select
-            placeholder="Todos los tipos"
-            options={Object.entries(typeLabels).map(([value, label]) => ({ value, label }))}
-            onChange={(e) => setFilter('type', e.target.value as WorkOrderType)}
+          <Input
+            placeholder="Tipo (sin catálogo real)"
+            onChange={(e) => setFilter('tipo', e.target.value)}
           />
           <Select
             placeholder="Todas las cuadrillas"
-            options={crewOptions}
-            onChange={(e) => setFilter('crewId', e.target.value)}
+            options={cuadrillas.map((c) => ({ value: c.id, label: c.nombre }))}
+            onChange={(e) => setFilter('cuadrilla_id', e.target.value)}
           />
-          <Input type="date" onChange={(e) => setFilter('dateFrom', e.target.value)} />
+          <Input type="date" onChange={(e) => setFilter('fecha_desde', e.target.value)} />
         </div>
       </div>
 
       {viewMode === 'map' ? (
         <div className="card p-5">
           <div className="h-96 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col items-center justify-center gap-2">
-            <Map className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+            <MapIcon className="w-8 h-8 text-slate-300 dark:text-slate-600" />
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Mapa interactivo próximamente</p>
             <p className="text-xs text-slate-400 dark:text-slate-500">Ubicación de las órdenes de trabajo abiertas</p>
           </div>
@@ -127,6 +164,12 @@ export default function OrdersPage() {
       ) : isLoading ? (
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-atlas-600" />
+        </div>
+      ) : isError ? (
+        <div className="card p-5">
+          <Alert variant="error" title="No se pudieron cargar las órdenes">
+            {mensajeDeError(error)}
+          </Alert>
         </div>
       ) : orders.length === 0 ? (
         <div className="card">
@@ -153,14 +196,19 @@ export default function OrdersPage() {
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <OrderRow key={order.id} order={order} onClick={() => navigate(`/orders/${order.id}`)} />
+                  <OrderRow
+                    key={order.id}
+                    order={order}
+                    cuadrillaNombre={order.cuadrilla_id ? cuadrillaNombrePorId.get(order.cuadrilla_id) : undefined}
+                    onClick={() => navigate(`/orders/${order.id}`)}
+                  />
                 ))}
               </tbody>
             </table>
           </div>
-          {data?.meta && (
+          {data?.pagination && (
             <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
-              {data.meta.total} orden{data.meta.total === 1 ? '' : 'es'} en total
+              {data.pagination.total} orden{data.pagination.total === 1 ? '' : 'es'} en total
             </div>
           )}
         </div>
@@ -169,8 +217,23 @@ export default function OrdersPage() {
   );
 }
 
-function OrderRow({ order, onClick }: { order: WorkOrder; onClick: () => void }) {
-  const slaState = getSlaState(order);
+function OrderRow({
+  order,
+  cuadrillaNombre,
+  onClick,
+}: {
+  order: Orden;
+  cuadrillaNombre: string | undefined;
+  onClick: () => void;
+}) {
+  // Cacheado por react-query: filas con el mismo cliente_id no repiten la llamada.
+  const { data: cliente } = useQuery<Cliente>({
+    queryKey: ['cliente', order.cliente_id],
+    queryFn: () => clientesApi.detalle(order.cliente_id),
+  });
+
+  const domicilio = cliente?.domicilios?.find((d) => d.id === order.domicilio_id);
+  const slaState = getOrdenSlaState(order);
   const isUrgent = slaState === 'overdue' || slaState === 'dueSoon';
 
   return (
@@ -178,18 +241,14 @@ function OrderRow({ order, onClick }: { order: WorkOrder; onClick: () => void })
       onClick={onClick}
       className="border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors"
     >
-      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{order.orderNumber}</td>
-      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-        {order.customer?.firstName} {order.customer?.lastName}
-      </td>
-      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
-        {order.address ? `${order.address.street} ${order.address.number ?? ''}, ${order.address.city}` : '—'}
-      </td>
-      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{typeLabels[order.type]}</td>
+      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{order.numero}</td>
+      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{cliente?.nombre ?? '…'}</td>
+      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{domicilio?.direccion ?? '—'}</td>
+      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{order.tipo}</td>
       <td className="px-4 py-3">
-        <Badge variant={statusBadgeVariant[order.status]}>{statusLabels[order.status]}</Badge>
+        <Badge variant={variantEstadoOrden[order.estado]}>{etiquetasEstado[order.estado]}</Badge>
       </td>
-      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{order.crew?.name ?? 'Sin asignar'}</td>
+      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{cuadrillaNombre ?? 'Sin asignar'}</td>
       <td className="px-4 py-3">
         <span className={`inline-flex items-center gap-1 font-medium ${
           slaState === 'overdue'
@@ -199,7 +258,7 @@ function OrderRow({ order, onClick }: { order: WorkOrder; onClick: () => void })
               : 'text-slate-500 dark:text-slate-400'
         }`}>
           {isUrgent && <AlertTriangle className="w-3.5 h-3.5" />}
-          {formatSlaRemaining(order)}
+          {formatOrdenSlaRemaining(order)}
         </span>
       </td>
     </tr>
