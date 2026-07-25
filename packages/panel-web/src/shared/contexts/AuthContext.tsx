@@ -24,13 +24,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const response = await authApi.login({ email, password });
-      console.log('[AuthContext] Login successful:', response);
       const { user: userData, accessToken, refreshToken } = response;
       localStorage.setItem('accessToken', accessToken);
       localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user', JSON.stringify(userData));
-        console.log('[AuthContext] La cuarta, response:', localStorage.getItem('user'));
-      // setUser(userData);
+      setUser(userData);
     } finally {
       setIsLoading(false);
     }
