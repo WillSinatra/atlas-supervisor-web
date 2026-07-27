@@ -163,8 +163,8 @@ export default function DashboardLayout() {
       </motion.aside>
 
       <div
-        className="min-h-screen transition-all duration-300"
-        style={{ marginLeft: 'var(--sidebar-width)' }}
+        className="min-h-screen transition-all duration-300 lg:ms-[var(--content-ml)]"
+        style={{ ['--content-ml' as any]: sidebarWidth }}
       >
         <header className="sticky top-0 z-30 h-[--topbar-height] bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 lg:px-6">
           <div className="flex items-center gap-4">

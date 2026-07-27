@@ -117,17 +117,17 @@ export default function CrewDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => navigate('/crews')}
           className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
         </button>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{crew.nombre}</h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate">{crew.nombre}</h1>
         </div>
-        <Badge variant={variantEstadoCuadrilla[crew.estado]} className="ml-auto">
+        <Badge variant={variantEstadoCuadrilla[crew.estado]} className="sm:ml-auto">
           {etiquetasEstadoCuadrilla[crew.estado]}
         </Badge>
         <DeleteCrewButton crewId={crew.id} crewName={crew.nombre} />

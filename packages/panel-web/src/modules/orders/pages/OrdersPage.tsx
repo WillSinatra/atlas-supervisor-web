@@ -82,14 +82,14 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Órdenes de Trabajo</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Gestione y monitoree todas las órdenes de trabajo
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateTicketOpen(true)}>
             Crear Ticket
             <Badge variant="info" className="ml-1">
@@ -185,7 +185,7 @@ export default function OrdersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  <th className="px-4 py-3">ID</th>
+                  <th className="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-slate-800">ID</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Domicilio</th>
                   <th className="px-4 py-3">Tipo</th>
@@ -241,7 +241,7 @@ function OrderRow({
       onClick={onClick}
       className="border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors"
     >
-      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{order.numero}</td>
+      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white sticky left-0 z-10 bg-white dark:bg-slate-800">{order.numero}</td>
       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{cliente?.nombre ?? '…'}</td>
       <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{domicilio?.direccion ?? '—'}</td>
       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{order.tipo}</td>

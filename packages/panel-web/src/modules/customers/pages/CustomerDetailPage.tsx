@@ -68,12 +68,12 @@ export default function CustomerDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/customers')} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+      <div className="flex items-center gap-3 min-w-0">
+        <button onClick={() => navigate('/customers')} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0">
           <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
         </button>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{customer.nombre}</h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate">{customer.nombre}</h1>
         </div>
       </div>
 

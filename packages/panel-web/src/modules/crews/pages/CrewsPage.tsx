@@ -45,14 +45,14 @@ export default function CrewsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Cuadrillas</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Gestione y monitoree cuadrillas y técnicos
           </p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setModalAbierto(true)}>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setModalAbierto(true)} className="self-start sm:self-auto">
           Agregar cuadrilla
         </Button>
       </div>
