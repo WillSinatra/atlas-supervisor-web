@@ -18,7 +18,6 @@ import {
 } from '@/shared/constants/ordenLabels';
 import type { TipoOrden } from '@/shared/constants/ordenLabels';
 import type { EstadoOrden, PrioridadOrden, Cliente, Orden } from '@/types/atlas';
-import { CreateTicketModal } from '../components/CreateTicketModal';
 
 interface OrdenesFilters {
   estado?: EstadoOrden;
@@ -33,7 +32,6 @@ export default function OrdersPage() {
   const [filters, setFilters] = useState<OrdenesFilters>({});
   const [search, setSearch] = useState('');
   const [prioridad, setPrioridad] = useState<PrioridadOrden | ''>('');
-  const [createTicketOpen, setCreateTicketOpen] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ordenes', filters],
@@ -78,12 +76,6 @@ export default function OrdersPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setCreateTicketOpen(true)}>
-            Crear Ticket
-            <Badge variant="info" className="ml-1">
-              Beta
-            </Badge>
-          </Button>
           <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/orders/nueva')}>
             Nueva orden
           </Button>
@@ -114,7 +106,6 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <CreateTicketModal open={createTicketOpen} onClose={() => setCreateTicketOpen(false)} />
 
       <div className="card p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
