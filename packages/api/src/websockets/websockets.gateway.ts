@@ -70,4 +70,14 @@ export class WebsocketsGateway implements OnGatewayConnection, OnGatewayDisconne
   emitDashboardUpdate(data: any) {
     this.server.emit('dashboard:update', data);
   }
+
+  // Emitir oferta de despacho (cascada u open) a una cuadrilla puntual
+  emitDispatchOffer(crewId: string, payload: any) {
+    this.server.to(`crew:${crewId}`).emit('dispatch:offer', payload);
+  }
+
+  // Emitir agotamiento de cascada (RF-PLA-012) para el panel de supervisión
+  emitDispatchExhausted(payload: { orderId: string; orderNumber: string }) {
+    this.server.emit('dispatch:exhausted', payload);
+  }
 }

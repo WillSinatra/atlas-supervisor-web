@@ -1,4 +1,4 @@
-const BASE_URL = 'https://proyectos.dnatech.net.ar/atlas/v1/public';
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 export async function testLogin(  email: string = '',
   password: string): Promise<void> {

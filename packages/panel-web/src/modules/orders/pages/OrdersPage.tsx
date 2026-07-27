@@ -6,48 +6,36 @@ import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
-import { Alert } from '@/shared/components/ui/Alert';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { ordenesApi, clientesApi, cuadrillasApi, mensajeDeError } from '@/shared/services/api';
 import { getOrdenSlaState, formatOrdenSlaRemaining } from '@/shared/utils/sla';
-import { etiquetasEstado } from '@/types/atlas';
-import type { Cliente, EstadoOrden, Orden } from '@/types/atlas';
+import {
+  estadoOrdenLabels,
+  estadoOrdenBadgeVariant,
+  prioridadLabels,
+  prioridadBadgeVariant,
+  tipoOrdenLabels,
+} from '@/shared/constants/ordenLabels';
+import type { TipoOrden } from '@/shared/constants/ordenLabels';
+import type { EstadoOrden, PrioridadOrden, Cliente, Orden } from '@/types/atlas';
 import { CreateTicketModal } from '../components/CreateTicketModal';
 
-type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
-
-const variantEstadoOrden: Record<EstadoOrden, BadgeVariant> = {
-  pendiente: 'neutral',
-  asignada: 'info',
-  aceptada: 'info',
-  en_proceso: 'warning',
-  completada: 'success',
-  cancelada: 'danger',
-};
-
-// Filtros que el backend real acepta (GET /v1/ordenes). `search` y `prioridad`
-// no son parámetros soportados por la API, así que se aplican en cliente sobre
-// la página ya traída (ver más abajo).
-interface OrdersServerFilters {
+interface OrdenesFilters {
   estado?: EstadoOrden;
   cuadrilla_id?: string;
-  tipo?: string;
+  tipo?: TipoOrden;
   fecha_desde?: string;
 }
 
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
-  const [filters, setFilters] = useState<OrdersServerFilters>({});
+  const [filters, setFilters] = useState<OrdenesFilters>({});
   const [search, setSearch] = useState('');
+  const [prioridad, setPrioridad] = useState<PrioridadOrden | ''>('');
   const [createTicketOpen, setCreateTicketOpen] = useState(false);
 
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-  } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ordenes', filters],
     queryFn: () => ordenesApi.listar(filters as Record<string, string>),
   });
@@ -56,19 +44,16 @@ export default function OrdersPage() {
     queryKey: ['cuadrillas', 'filter-options'],
     queryFn: () => cuadrillasApi.listar(),
   });
-
   const cuadrillas = cuadrillasData?.data ?? [];
   const cuadrillaNombrePorId = useMemo(
     () => new Map(cuadrillas.map((c) => [c.id, c.nombre])),
     [cuadrillas],
   );
 
-  const setFilter = <K extends keyof OrdersServerFilters>(key: K, value: OrdersServerFilters[K]) => {
+  const setFilter = <K extends keyof OrdenesFilters>(key: K, value: OrdenesFilters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: value || undefined }));
   };
 
-  // El backend no soporta filtro de texto libre ni de prioridad: se filtran acá
-  // los resultados de la página actual (no busca en todo el histórico).
   const orders = useMemo(() => {
     let result = data?.data ?? [];
     if (search.trim()) {
@@ -77,8 +62,11 @@ export default function OrdersPage() {
         (o) => o.numero.toLowerCase().includes(q) || (o.titulo ?? '').toLowerCase().includes(q),
       );
     }
+    if (prioridad) {
+      result = result.filter((o) => o.prioridad === prioridad);
+    }
     return result;
-  }, [data, search]);
+  }, [data, search, prioridad]);
 
   return (
     <div className="space-y-6">
@@ -95,6 +83,9 @@ export default function OrdersPage() {
             <Badge variant="info" className="ml-1">
               Beta
             </Badge>
+          </Button>
+          <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/orders/nueva')}>
+            Nueva orden
           </Button>
           <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-700">
             <button
@@ -125,24 +116,29 @@ export default function OrdersPage() {
 
       <CreateTicketModal open={createTicketOpen} onClose={() => setCreateTicketOpen(false)} />
 
-      {/* Filtros */}
       <div className="card p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <div className="lg:col-span-2">
             <Input
-              placeholder="Buscar por OT o título..."
+              placeholder="Buscar por número o título..."
               leftIcon={<Search className="w-4 h-4 text-slate-400" />}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <Select
             placeholder="Todos los estados"
-            options={Object.entries(etiquetasEstado).map(([value, label]) => ({ value, label }))}
+            options={Object.entries(estadoOrdenLabels).map(([value, label]) => ({ value, label }))}
             onChange={(e) => setFilter('estado', e.target.value as EstadoOrden)}
           />
-          <Input
-            placeholder="Tipo (sin catálogo real)"
-            onChange={(e) => setFilter('tipo', e.target.value)}
+          <Select
+            placeholder="Todos los tipos"
+            options={Object.entries(tipoOrdenLabels).map(([value, label]) => ({ value, label }))}
+            onChange={(e) => setFilter('tipo', e.target.value as TipoOrden)}
+          />
+          <Select
+            placeholder="Todas las prioridades"
+            options={Object.entries(prioridadLabels).map(([value, label]) => ({ value, label }))}
+            onChange={(e) => setPrioridad(e.target.value as PrioridadOrden | '')}
           />
           <Select
             placeholder="Todas las cuadrillas"
@@ -166,10 +162,17 @@ export default function OrdersPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-atlas-600" />
         </div>
       ) : isError ? (
-        <div className="card p-5">
-          <Alert variant="error" title="No se pudieron cargar las órdenes">
-            {mensajeDeError(error)}
-          </Alert>
+        <div className="card">
+          <EmptyState
+            icon={<Search className="w-8 h-8" />}
+            title="No se pudo cargar el listado"
+            description={mensajeDeError(error)}
+            action={
+              <Button variant="secondary" onClick={() => refetch()}>
+                Reintentar
+              </Button>
+            }
+          />
         </div>
       ) : orders.length === 0 ? (
         <div className="card">
@@ -185,10 +188,12 @@ export default function OrdersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  <th className="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-slate-800">ID</th>
+                  <th className="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-slate-800">Número</th>
+                  <th className="px-4 py-3">Título</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Domicilio</th>
                   <th className="px-4 py-3">Tipo</th>
+                  <th className="px-4 py-3">Prioridad</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Cuadrilla</th>
                   <th className="px-4 py-3">SLA restante</th>
@@ -226,7 +231,6 @@ function OrderRow({
   cuadrillaNombre: string | undefined;
   onClick: () => void;
 }) {
-  // Cacheado por react-query: filas con el mismo cliente_id no repiten la llamada.
   const { data: cliente } = useQuery<Cliente>({
     queryKey: ['cliente', order.cliente_id],
     queryFn: () => clientesApi.detalle(order.cliente_id),
@@ -242,11 +246,15 @@ function OrderRow({
       className="border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors"
     >
       <td className="px-4 py-3 font-medium text-slate-900 dark:text-white sticky left-0 z-10 bg-white dark:bg-slate-800">{order.numero}</td>
+      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{order.titulo ?? '—'}</td>
       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{cliente?.nombre ?? '…'}</td>
       <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{domicilio?.direccion ?? '—'}</td>
-      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{order.tipo}</td>
+      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{tipoOrdenLabels[order.tipo as TipoOrden] ?? order.tipo}</td>
       <td className="px-4 py-3">
-        <Badge variant={variantEstadoOrden[order.estado]}>{etiquetasEstado[order.estado]}</Badge>
+        <Badge variant={prioridadBadgeVariant[order.prioridad]}>{prioridadLabels[order.prioridad]}</Badge>
+      </td>
+      <td className="px-4 py-3">
+        <Badge variant={estadoOrdenBadgeVariant[order.estado]}>{estadoOrdenLabels[order.estado]}</Badge>
       </td>
       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{cuadrillaNombre ?? 'Sin asignar'}</td>
       <td className="px-4 py-3">

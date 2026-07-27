@@ -162,7 +162,7 @@ Después de correr el seed, podés ingresar al panel con:
 
 | Email | Contraseña |
 |---|---|
-| `admin@atlas.com` | `admin123` |
+| `admin@atlas.local` | `admin123` |
 
 ## 🚧 Estado del proyecto
 

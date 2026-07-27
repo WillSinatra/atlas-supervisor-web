@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import type {
   DashboardData,
@@ -12,6 +13,8 @@ import type {
   Tecnico,
   Vehiculo,
   TicketBeta,
+  CrearOrdenInput,
+  EditarOrdenInput,
 } from '../../types/atlas';
 
 /**
@@ -21,7 +24,7 @@ import type {
  * server no tiene efecto, hay que recompilar):
  *   VITE_API_URL=https://proyectoatlas.dnatech.net.ar/api
  */
-const API_URL =  'https://proyectoatlas.dnatech.net.ar/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://proyectoatlas.dnatech.net.ar/api';
 
 export const api: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -226,11 +229,11 @@ export const ordenesApi = {
     const { data } = await api.get<Orden & { linea_tiempo: EventoOrden[] }>(`/v1/ordenes/${id}`);
     return data;
   },
-  async crear(payload: Partial<Orden>) {
-    const { data } = await api.post<Orden>('/v1/ordenes', payload);
+  async crear(payload: CrearOrdenInput) {
+    const { data } = await api.post<Orden & { duplicado?: boolean }>('/v1/ordenes', payload);
     return data;
   },
-  async actualizar(id: string, payload: Partial<Orden>) {
+  async actualizar(id: string, payload: EditarOrdenInput) {
     const { data } = await api.patch<Orden>(`/v1/ordenes/${id}`, payload);
     return data;
   },
@@ -378,7 +381,7 @@ export const cuadrillasApi = {
   },
   // El backend real solo acepta estos 4 campos en el PATCH; codigo/especialidad/zona
   // (Pedido 4 a Cristian, sin arrancar) tiran 400 si se incluyen, aunque no cambien.
-  async actualizar(id: string, payload: Partial<Pick<Cuadrilla, 'nombre' | 'estado' | 'lat' | 'lng'>>) {
+  async actualizar(id: string, payload: Partial<{ nombre: string; estado: string; lat: number; lng: number }>) {
     const { data } = await api.patch<Cuadrilla>(`/v1/cuadrillas/${id}`, payload);
     return data;
   },
