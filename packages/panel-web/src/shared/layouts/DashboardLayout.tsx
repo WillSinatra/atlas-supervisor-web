@@ -10,6 +10,7 @@ import NotificationsDropdown from '@/shared/components/NotificationsDropdown';
 import {
   LayoutDashboard,
   ClipboardList,
+  FileText,
   Users,
   UserCircle,
   BarChart3,
@@ -30,6 +31,7 @@ import {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Órdenes de Trabajo', href: '/orders', icon: ClipboardList },
+  { name: 'Tickets', href: '/tickets', icon: FileText },
   { name: 'Cuadrillas', href: '/crews', icon: Users },
   { name: 'Clientes', href: '/customers', icon: UserCircle },
   { name: 'Reportes', href: '/reports', icon: BarChart3 },

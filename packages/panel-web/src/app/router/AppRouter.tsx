@@ -16,6 +16,7 @@ const CustomersPlaceholder = lazy(() => import('@/modules/customers/pages/Custom
 const CustomerDetailPage = lazy(() => import('@/modules/customers/pages/CustomerDetailPage'));
 const ReportsPlaceholder = lazy(() => import('@/modules/reports/pages/ReportsPage'));
 const SettingsPlaceholder = lazy(() => import('@/modules/settings/pages/SettingsPage'));
+const TicketsPage = lazy(() => import('@/modules/tickets/pages/TicketsPage'));
 
 export const router = createBrowserRouter([
   {
@@ -55,6 +56,10 @@ export const router = createBrowserRouter([
       {
         path: 'orders/:id',
         element: <OrderDetailPage />,
+      },
+      {
+        path: 'tickets',
+        element: <TicketsPage />,
       },
       {
         path: 'crews',
