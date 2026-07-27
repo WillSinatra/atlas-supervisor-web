@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Search, Check } from 'lucide-react';
 import { Input } from '@/shared/components/ui/Input';
@@ -32,9 +32,15 @@ const initialForm: FormState = {
 
 export default function NuevaOrdenPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const desdeTicket = (location.state as { desdeTicket?: { tipo?: string; descripcion?: string; clienteNombre?: string } } | null)?.desdeTicket;
   const queryClient = useQueryClient();
 
-  const [form, setForm] = useState<FormState>(initialForm);
+  const [form, setForm] = useState<FormState>(() => ({
+    ...initialForm,
+    tipo: (desdeTicket?.tipo as TipoOrden) ?? '',
+    descripcion: desdeTicket?.descripcion ?? '',
+  }));
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [clienteQuery, setClienteQuery] = useState('');
   const [clienteDropdownOpen, setClienteDropdownOpen] = useState(false);
@@ -142,6 +148,12 @@ export default function NuevaOrdenPage() {
           </p>
         </div>
       </div>
+
+      {desdeTicket && (
+        <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 text-sm text-blue-800 dark:text-blue-300">
+          Creando orden desde ticket de <strong>{desdeTicket.clienteNombre}</strong>. Completá los datos que faltan.
+        </div>
+      )}
 
       {duplicado && (
         <Alert variant="warning" title="Orden duplicada" onClose={() => setDuplicado(null)}>

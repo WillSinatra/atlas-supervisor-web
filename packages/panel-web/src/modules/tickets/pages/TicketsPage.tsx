@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, Search } from 'lucide-react';
 import { Input } from '@/shared/components/ui/Input';
@@ -23,6 +24,7 @@ const estadoLabel: Record<TicketStatus, string> = {
 };
 
 export default function TicketsPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -104,6 +106,7 @@ export default function TicketsPage() {
                   <th className="px-4 py-3">Cuadrilla</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Fecha</th>
+                  <th className="px-4 py-3">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -131,6 +134,14 @@ export default function TicketsPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
                       {new Date(ticket.creado_en).toLocaleDateString('es-AR')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => navigate("/orders/nueva", { state: { desdeTicket: { tipo: ticket.tipo, descripcion: ticket.descripcion ?? "", clienteNombre: ticket.cliente } } })}
+                        className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
+                      >
+                        Convertir en OT
+                      </button>
                     </td>
                   </tr>
                 ))}
