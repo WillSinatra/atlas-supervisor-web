@@ -81,7 +81,11 @@ export default function CrewDetailPage() {
     enabled: !!id,
   });
 
-  const invalidar = () => queryClient.invalidateQueries({ queryKey: ['cuadrilla', id] });
+  const [vehiculoRefreshKey, setVehiculoRefreshKey] = useState(0);
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ['cuadrilla', id] });
+    setVehiculoRefreshKey((k) => k + 1);
+  };
 
   useCrewBreadcrumb(id, crew);
 
@@ -164,7 +168,7 @@ export default function CrewDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <VehicleCard crewId={crew.id} vehiculo={crew.vehiculo ?? null} onSaved={invalidar} />
+          <VehicleCard key={`vehiculo-${vehiculoRefreshKey}`} crewId={crew.id} vehiculo={crew.vehiculo ?? null} onSaved={invalidar} />
           <MobileStockCard />
         </div>
       </div>
