@@ -366,6 +366,15 @@ export interface OperationalKpi {
   averageTimeMinutes: number;
 }
 
+export interface CrewProductivityBreakdown {
+  pendiente: number;
+  asignada: number;
+  aceptada: number;
+  en_proceso: number;
+  completada: number;
+  cancelada: number;
+}
+
 export interface CrewProductivity {
   id: string;
   name: string;
@@ -373,6 +382,9 @@ export interface CrewProductivity {
   specialty?: string;
   completedOrders: number;
   averageTime: number;
+  totalOrders: number;
+  productivityRate: number;
+  breakdown: CrewProductivityBreakdown;
 }
 
 export interface SlaCompliance {
@@ -429,6 +441,24 @@ export interface SatisfactionReport {
   average: number;
   totalRatings: number;
   distribution: SatisfactionDistribution;
+}
+
+export interface TasksClosedGroup {
+  id: string;
+  name: string;
+  total: number;
+  closed: number;
+  rate: number;
+}
+
+/** Índice de tareas internas cerradas (Pedido 10), fuente: GET /v1/tareas. */
+export interface TasksClosedIndex {
+  total: number;
+  closed: number;
+  rate: number;
+  avgItemsPerTask: number;
+  byArea: TasksClosedGroup[];
+  byEmployee: TasksClosedGroup[];
 }
 
 // ============ PAGINACIÓN ============

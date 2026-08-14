@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Map as MapIcon, AlertTriangle, Search, Plus } from 'lucide-react';
+import { Table, Map as MapIcon, AlertTriangle, Search, Plus, X } from 'lucide-react';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from '@/shared/components/ui/Badge';
@@ -24,18 +24,40 @@ interface OrdenesFilters {
   cuadrilla_id?: string;
   tipo?: TipoOrden;
   fecha_desde?: string;
+  /** Abiertas con la fecha comprometida ya pasada (tarjeta "Vencidas"). */
+  vencidas?: string;
+  /** Completadas a partir de esa fecha (tarjeta "Completadas Hoy"). */
+  completadas_desde?: string;
 }
 
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
-  const [filters, setFilters] = useState<OrdenesFilters>({});
   const [search, setSearch] = useState('');
   const [prioridad, setPrioridad] = useState<PrioridadOrden | ''>('');
+
+  // Los filtros viven en la URL: el dashboard puede enlazar directo a
+  // /orders?estado=pendiente y el link queda compartible.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters: OrdenesFilters = useMemo(
+    () => ({
+      estado: (searchParams.get('estado') as EstadoOrden) || undefined,
+      tipo: (searchParams.get('tipo') as TipoOrden) || undefined,
+      cuadrilla_id: searchParams.get('cuadrilla_id') || undefined,
+      fecha_desde: searchParams.get('fecha_desde') || undefined,
+      vencidas: searchParams.get('vencidas') || undefined,
+      completadas_desde: searchParams.get('completadas_desde') || undefined,
+    }),
+    [searchParams],
+  );
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ordenes', filters],
     queryFn: () => ordenesApi.listar(filters as Record<string, string>),
+    // El técnico completa la tarea desde la app y acá no hay ningún push que
+    // avise: se refresca sola cada 30s para que el supervisor vea el cambio
+    // de estado sin tener que recargar a mano.
+    refetchInterval: 30_000,
   });
 
   const { data: cuadrillasData } = useQuery({
@@ -49,7 +71,10 @@ export default function OrdersPage() {
   );
 
   const setFilter = <K extends keyof OrdenesFilters>(key: K, value: OrdenesFilters[K]) => {
-    setFilters((prev) => ({ ...prev, [key]: value || undefined }));
+    const proximos = new URLSearchParams(searchParams);
+    if (value) proximos.set(key, String(value));
+    else proximos.delete(key);
+    setSearchParams(proximos, { replace: true });
   };
 
   const orders = useMemo(() => {
@@ -119,25 +144,56 @@ export default function OrdersPage() {
           <Select
             placeholder="Todos los estados"
             options={Object.entries(estadoOrdenLabels).map(([value, label]) => ({ value, label }))}
+            value={filters.estado ?? ''}
             onChange={(e) => setFilter('estado', e.target.value as EstadoOrden)}
           />
           <Select
             placeholder="Todos los tipos"
             options={Object.entries(tipoOrdenLabels).map(([value, label]) => ({ value, label }))}
+            value={filters.tipo ?? ''}
             onChange={(e) => setFilter('tipo', e.target.value as TipoOrden)}
           />
           <Select
             placeholder="Todas las prioridades"
             options={Object.entries(prioridadLabels).map(([value, label]) => ({ value, label }))}
+            value={prioridad}
             onChange={(e) => setPrioridad(e.target.value as PrioridadOrden | '')}
           />
           <Select
             placeholder="Todas las cuadrillas"
             options={cuadrillas.map((c) => ({ value: c.id, label: c.nombre }))}
+            value={filters.cuadrilla_id ?? ''}
             onChange={(e) => setFilter('cuadrilla_id', e.target.value)}
           />
-          <Input type="date" onChange={(e) => setFilter('fecha_desde', e.target.value)} />
+          <Input
+            type="date"
+            value={filters.fecha_desde ?? ''}
+            onChange={(e) => setFilter('fecha_desde', e.target.value)}
+          />
         </div>
+
+        {/* Filtros que llegan desde el dashboard y no tienen control propio:
+            se muestran para que no parezca que faltan órdenes. */}
+        {(filters.vencidas || filters.completadas_desde) && (
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            {filters.vencidas && (
+              <button
+                onClick={() => setFilter('vencidas', undefined)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+              >
+                Solo atrasadas <X className="w-3 h-3" />
+              </button>
+            )}
+            {filters.completadas_desde && (
+              <button
+                onClick={() => setFilter('completadas_desde', undefined)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+              >
+                Completadas desde hoy <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {viewMode === 'map' ? (

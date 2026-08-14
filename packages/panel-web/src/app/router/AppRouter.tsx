@@ -17,6 +17,15 @@ const CustomerDetailPage = lazy(() => import('@/modules/customers/pages/Customer
 const ReportsPlaceholder = lazy(() => import('@/modules/reports/pages/ReportsPage'));
 const SettingsPlaceholder = lazy(() => import('@/modules/settings/pages/SettingsPage'));
 const TicketsPage = lazy(() => import('@/modules/tickets/pages/TicketsPage'));
+// Módulo nuevo de tickets. Convive con el anterior hasta reemplazarlo.
+const SoportePage = lazy(() => import('@/modules/tickets/pages/SoportePage'));
+const TareasPage = lazy(() => import('@/modules/tareas/pages/TareasPage'));
+const EmpleadosPage = lazy(() => import('@/modules/empleados/pages/EmpleadosPage'));
+const MaterialesPage = lazy(() => import('@/modules/materiales/pages/MaterialesPage'));
+const ChecklistsPage = lazy(() => import('@/modules/checklists/pages/ChecklistsPage'));
+const RemitoImprimirPage = lazy(() => import('@/modules/materiales/pages/RemitoImprimirPage'));
+const PresupuestoImprimirPage = lazy(() => import('@/modules/materiales/pages/PresupuestoImprimirPage'));
+const EtiquetasImprimirPage = lazy(() => import('@/modules/materiales/pages/EtiquetasImprimirPage'));
 
 export const router = createBrowserRouter([
   {
@@ -28,6 +37,33 @@ export const router = createBrowserRouter([
         element: <LoginPage />,
       },
     ],
+  },
+  {
+    // Fuera del layout: se abre en una pestaña aparte para imprimir o guardar PDF.
+    path: '/remitos/:id/imprimir',
+    element: (
+      <ProtectedRoute>
+        <RemitoImprimirPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/presupuestos/:id/imprimir',
+    element: (
+      <ProtectedRoute>
+        <PresupuestoImprimirPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    // Hoja de etiquetas del pañol. Los materiales van en la query (?ids=...)
+    // para poder guardar el enlace y reimprimir la misma tanda.
+    path: '/materiales/etiquetas',
+    element: (
+      <ProtectedRoute>
+        <EtiquetasImprimirPage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: '/',
@@ -62,8 +98,28 @@ export const router = createBrowserRouter([
         element: <TicketsPage />,
       },
       {
+        path: 'soporte',
+        element: <SoportePage />,
+      },
+      {
+        path: 'tareas',
+        element: <TareasPage />,
+      },
+      {
         path: 'crews',
         element: <CrewsPlaceholder />,
+      },
+      {
+        path: 'empleados',
+        element: <EmpleadosPage />,
+      },
+      {
+        path: 'materiales',
+        element: <MaterialesPage />,
+      },
+      {
+        path: 'checklists',
+        element: <ChecklistsPage />,
       },
       {
         path: 'crews/:id',

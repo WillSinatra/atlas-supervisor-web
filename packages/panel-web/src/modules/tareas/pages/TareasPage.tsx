@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClock,
@@ -22,6 +22,7 @@ import { Modal } from '@/shared/components/ui/Modal';
 import { Alert } from '@/shared/components/ui/Alert';
 import { Tabs } from '@/shared/components/ui/Tabs';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
+import { cn } from '@/shared/utils/cn';
 import { mensajeDeError } from '@/shared/services/api';
 import { plantillasApi, tareasApi } from '@/shared/services/tareas';
 import { useAuth } from '@/shared/contexts/AuthContext';
@@ -79,10 +80,11 @@ function estaVencida(tarea: Tarea): boolean {
   return new Date(tarea.vence_el).getTime() < Date.now();
 }
 
+const PESTANA_KEY = 'tareas-pestana';
+
 export default function TareasPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const [pestana, setPestana] = useState('mias');
 
   // "Recibidas" es lo que entra desde afuera: lo del bot, y lo que alguien dejó
   // para un sector al que no pertenezco. Sin esta pestaÃ±a, una tarea que crea
@@ -90,6 +92,23 @@ export default function TareasPage() {
   const pestanas = ROLES_SUPERVISION.includes(user?.rol ?? '')
     ? [pestanaMias, pestanaRecibidas, pestanaPedidas, pestanaRecurrentes]
     : [pestanaMias, pestanaPedidas, pestanaRecurrentes];
+
+  // Recordar en qué pestaña estaba: recargar y volver siempre a "Mis tareas"
+  // era la queja concreta que motivó esto.
+  const [pestana, setPestana] = useState(() => localStorage.getItem(PESTANA_KEY) || 'mias');
+
+  // Si la pestaña guardada ya no es válida (cambió de rol, o quedó "recibidas"
+  // de una sesión con más permisos), cae a "mias" en vez de mostrar una vacía.
+  useEffect(() => {
+    if (!pestanas.some((p) => p.id === pestana)) {
+      setPestana('mias');
+    }
+  }, [pestana, pestanas]);
+
+  useEffect(() => {
+    localStorage.setItem(PESTANA_KEY, pestana);
+  }, [pestana]);
+
   const [nuevaTarea, setNuevaTarea] = useState(false);
   const [plantillaEnEdicion, setPlantillaEnEdicion] = useState<TareaPlantilla | null>(null);
   const [modalPlantilla, setModalPlantilla] = useState(false);
@@ -171,6 +190,20 @@ export default function TareasPage() {
 
 // ------------------------------------------------------------------ listas ---
 
+type FiltroEstadoTab = 'pendientes' | 'hechas' | 'canceladas';
+
+const FILTRO_ESTADO_KEY = 'tareas-filtro-estado';
+const etiquetasFiltroEstado: Record<FiltroEstadoTab, string> = {
+  pendientes: 'Pendientes',
+  hechas: 'Hechas',
+  canceladas: 'Canceladas',
+};
+
+function leerFiltroEstadoGuardado(): FiltroEstadoTab {
+  const guardado = localStorage.getItem(FILTRO_ESTADO_KEY);
+  return guardado === 'hechas' || guardado === 'canceladas' ? guardado : 'pendientes';
+}
+
 function ListaTareas({
   filtro,
   miEmpleadoId,
@@ -178,8 +211,14 @@ function ListaTareas({
   filtro: 'mias' | 'creadas_por_mi' | 'todas';
   miEmpleadoId: string | null;
 }) {
-  const [verCerradas, setVerCerradas] = useState(false);
+  // Reemplaza el viejo checkbox "Mostrar también hechas y canceladas": separar
+  // en tres pestañas deja claro qué se está viendo, en vez de una lista mixta.
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstadoTab>(leerFiltroEstadoGuardado);
   const [soloSinTomar, setSoloSinTomar] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(FILTRO_ESTADO_KEY, filtroEstado);
+  }, [filtroEstado]);
 
   const parametrosDelFiltro =
     filtro === 'mias'
@@ -188,17 +227,27 @@ function ListaTareas({
         ? { creadas_por_mi: true }
         : { todas: true, ...(soloSinTomar ? { sin_tomar: true } : {}) };
 
+  const parametrosDelEstado =
+    filtroEstado === 'pendientes'
+      ? { pendientes: true as const }
+      : filtroEstado === 'hechas'
+        ? { estado: 'hecha' as EstadoTarea }
+        : { estado: 'cancelada' as EstadoTarea };
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['tareas', filtro, verCerradas, soloSinTomar],
+    queryKey: ['tareas', filtro, filtroEstado, soloSinTomar],
     queryFn: () =>
       tareasApi.listar({
         ...parametrosDelFiltro,
-        ...(verCerradas ? {} : { pendientes: true }),
+        ...parametrosDelEstado,
         per_page: 100,
       }),
-    // Para "las que pedí": si no refresca sola, no te enterás de que la
-    // completaron hasta cambiar de pestaña a mano.
-    refetchInterval: 2 * 60 * 1000,
+    // Si no refresca sola, una tarea que te acaban de asignar no aparece
+    // hasta que cambies de pestaña a mano. 30s balancea "se entera rápido"
+    // contra pegarle a la API todo el tiempo; sigue corriendo aunque la
+    // pestaña del navegador no esté en foco.
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: true,
   });
 
   const tareas = data?.data ?? [];
@@ -230,16 +279,23 @@ function ListaTareas({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-          <input
-            type="checkbox"
-            checked={verCerradas}
-            onChange={(e) => setVerCerradas(e.target.checked)}
-            className="rounded border-slate-300 text-atlas-600 focus:ring-atlas-500"
-          />
-          Mostrar también las hechas y canceladas
-        </label>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          {(Object.keys(etiquetasFiltroEstado) as FiltroEstadoTab[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFiltroEstado(f)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
+                filtroEstado === f
+                  ? 'bg-atlas-600 border-atlas-600 text-white'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white',
+              )}
+            >
+              {etiquetasFiltroEstado[f]}
+            </button>
+          ))}
+        </div>
 
         {/* Lo que entró y todavía no agarró nadie: es la cola real de trabajo
             pendiente de repartir. */}
@@ -261,13 +317,15 @@ function ListaTareas({
           <EmptyState
             icon={<CheckCircle2 className="w-8 h-8" />}
             title={
-              filtro === 'mias'
-                ? 'No tenés nada pendiente'
-                : filtro === 'creadas_por_mi'
-                  ? 'No pediste ninguna tarea'
-                  : soloSinTomar
-                    ? 'No hay nada sin tomar'
-                    : 'No entró ninguna tarea'
+              filtroEstado !== 'pendientes'
+                ? `No hay ${etiquetasFiltroEstado[filtroEstado].toLowerCase()}`
+                : filtro === 'mias'
+                  ? 'No tenés nada pendiente'
+                  : filtro === 'creadas_por_mi'
+                    ? 'No pediste ninguna tarea'
+                    : soloSinTomar
+                      ? 'No hay nada sin tomar'
+                      : 'No entró ninguna tarea'
             }
             description={
               filtro === 'mias'

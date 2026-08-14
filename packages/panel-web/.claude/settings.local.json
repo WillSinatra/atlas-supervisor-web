@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(API=\"s:/html/proyectos/atlas/v1\"; echo \"=== hay mantenimientos en la API? ===\"; grep -rn \"mantenimiento\" \"$API/public/index.php\" \"$API/sql/\"*.sql 2>/dev/null | head -5 || echo \"NO existe nada de mantenimientos\"; echo; echo \"=== X-Api-Key se usa? ===\"; grep -rn \"X-Api-Key\\\\|API_KEY\\\\|apiKey\" \"$API/src/\" \"$API/public/index.php\" | head -8)"
+    ]
+  }
+}

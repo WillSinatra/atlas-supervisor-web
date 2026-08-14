@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Users, MapPin, Search, Plus, WifiOff } from 'lucide-react';
 import { Input } from '@/shared/components/ui/Input';
@@ -27,7 +27,15 @@ const variantEstadoCuadrilla: Record<EstadoCuadrilla, 'success' | 'warning' | 'd
 export default function CrewsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [estadoFiltro, setEstadoFiltro] = useState<EstadoCuadrilla | ''>('');
+  // En la URL para poder enlazar desde el dashboard: /crews?estado=disponible
+  const [searchParams, setSearchParams] = useSearchParams();
+  const estadoFiltro = (searchParams.get('estado') ?? '') as EstadoCuadrilla | '';
+  const setEstadoFiltro = (valor: EstadoCuadrilla | '') => {
+    const proximos = new URLSearchParams(searchParams);
+    if (valor) proximos.set('estado', valor);
+    else proximos.delete('estado');
+    setSearchParams(proximos, { replace: true });
+  };
   const [busqueda, setBusqueda] = useState('');
   const [modalAbierto, setModalAbierto] = useState(false);
 
@@ -73,6 +81,7 @@ export default function CrewsPage() {
           <Select
             placeholder="Todos los estados"
             options={Object.entries(etiquetasEstadoCuadrilla).map(([value, label]) => ({ value, label }))}
+            value={estadoFiltro}
             onChange={(e) => setEstadoFiltro((e.target.value || '') as EstadoCuadrilla | '')}
           />
         </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Search, Check } from 'lucide-react';
@@ -6,9 +6,9 @@ import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Button } from '@/shared/components/ui/Button';
 import { Alert } from '@/shared/components/ui/Alert';
-import { ordenesApi, clientesApi, camposInvalidos, mensajeDeError } from '@/shared/services/api';
-import { tipoOrdenLabels } from '@/shared/constants/ordenLabels';
-import type { TipoOrden } from '@/shared/constants/ordenLabels';
+import { ordenesApi, clientesApi, cuadrillasApi, camposInvalidos, mensajeDeError } from '@/shared/services/api';
+import { FALLAS, tipoOrdenLabels } from '@/shared/constants/ordenLabels';
+import type { Falla, TipoOrden } from '@/shared/constants/ordenLabels';
 import { OrdenCamposComunes, type CamposComunesValues } from '@/modules/orders/components/OrdenCamposComunes';
 import type { CrearOrdenInput, PrioridadOrden, Cliente } from '@/types/atlas';
 
@@ -16,6 +16,12 @@ interface FormState extends CamposComunesValues {
   tipo: TipoOrden | '';
   cliente_id: string;
   domicilio_id: string;
+  cuadrilla_id: string;
+}
+
+/** ¿Ese motivo es una de las fallas que maneja el panel? */
+function esFalla(valor: string | undefined): valor is Falla {
+  return valor !== undefined && (FALLAS as readonly string[]).includes(valor);
 }
 
 const initialForm: FormState = {
@@ -23,6 +29,7 @@ const initialForm: FormState = {
   prioridad: '',
   cliente_id: '',
   domicilio_id: '',
+  cuadrilla_id: '',
   titulo: '',
   descripcion: '',
   falla: '',
@@ -33,13 +40,48 @@ const initialForm: FormState = {
 export default function NuevaOrdenPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const desdeTicket = (location.state as { desdeTicket?: { tipo?: string; descripcion?: string; clienteNombre?: string } } | null)?.desdeTicket;
+  const desdeTicket = (
+    location.state as {
+      desdeTicket?: {
+        tipo?: string;
+        descripcion?: string;
+        clienteNombre?: string;
+        cuadrillaId?: string;
+        clienteId?: string;
+        domicilioId?: string;
+        /**
+         * Lo que el ticket sabe del cliente aunque no esté en el padrón. Con
+         * esto se lo busca solo, y si no aparece se ofrece darlo de alta sin
+         * volver a tipear nada.
+         */
+        clienteTelefono?: string;
+        direccion?: string;
+        /** El motivo del reclamo es la `falla` de la orden: mismo vocabulario. */
+        falla?: string;
+        /**
+         * Con esto la API vuelve a chequear la verificación de N2 y rechaza la
+         * creación si quedó algo pendiente. El botón deshabilitado en la
+         * bandeja es comodidad; el control de verdad está del otro lado.
+         */
+        ticketBetaId?: string;
+      };
+    } | null
+  )?.desdeTicket;
   const queryClient = useQueryClient();
 
   const [form, setForm] = useState<FormState>(() => ({
     ...initialForm,
     tipo: (desdeTicket?.tipo as TipoOrden) ?? '',
     descripcion: desdeTicket?.descripcion ?? '',
+    // Si el ticket ya venía con cuadrilla, la orden nace con ella: volver a
+    // elegirla a mano era el paso de más que sobraba.
+    cuadrilla_id: desdeTicket?.cuadrillaId ?? '',
+    cliente_id: desdeTicket?.clienteId ?? '',
+    domicilio_id: desdeTicket?.domicilioId ?? '',
+    // El motivo con el que N2 clasificó el reclamo ya es la falla de la orden.
+    // Se valida en vez de confiar: el motivo del ticket es texto libre y puede
+    // venir de una integración con un valor que el panel no conoce.
+    falla: esFalla(desdeTicket?.falla) ? desdeTicket.falla : '',
   }));
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [clienteQuery, setClienteQuery] = useState('');
@@ -66,6 +108,83 @@ export default function NuevaOrdenPage() {
   });
 
   const domicilioOptions = (domiciliosData ?? []).map((d) => ({ value: d.id, label: d.direccion }));
+
+  const { data: cuadrillasData } = useQuery({
+    queryKey: ['cuadrillas'],
+    queryFn: () => cuadrillasApi.listar(),
+  });
+
+  // Viniendo de un ticket ligado al padrón, se trae el cliente y se deja
+  // seleccionado: el cartel decía "orden para tal cliente" y abajo el formulario
+  // igual lo pedía de nuevo, que es exactamente lo que no tenía sentido.
+  const { data: clienteDelTicket } = useQuery({
+    queryKey: ['cliente', desdeTicket?.clienteId],
+    queryFn: () => clientesApi.detalle(desdeTicket!.clienteId!),
+    enabled: !!desdeTicket?.clienteId,
+  });
+
+  useEffect(() => {
+    if (clienteDelTicket && !clienteSeleccionado) {
+      setClienteSeleccionado(clienteDelTicket);
+      setClienteQuery(clienteDelTicket.nombre);
+    }
+  }, [clienteDelTicket, clienteSeleccionado]);
+
+  /**
+   * El ticket no siempre viene ligado al padrón: los que entran por el bot o el
+   * portal traen el nombre y la dirección como texto suelto. En vez de dejar el
+   * formulario vacío para que alguien busque a mano lo que el ticket ya dice,
+   * se lo busca solo.
+   *
+   * El teléfono va primero porque es lo que menos se repite; el nombre después.
+   */
+  const claveBusqueda = (desdeTicket?.clienteTelefono || desdeTicket?.clienteNombre || '').trim();
+  const buscarAutomatico = !!desdeTicket && !desdeTicket.clienteId && claveBusqueda.length >= 3;
+
+  const { data: candidatos, isFetching: buscandoCandidatos } = useQuery({
+    queryKey: ['clientes', 'auto', claveBusqueda],
+    queryFn: () => clientesApi.listar({ q: claveBusqueda, per_page: 5 }),
+    enabled: buscarAutomatico,
+  });
+
+  // Un solo resultado es casi siempre el cliente: se elige solo. Con varios se
+  // muestran para que decida una persona, porque acertar por nombre es
+  // justamente lo que sale mal.
+  const [autoResuelto, setAutoResuelto] = useState(false);
+  useEffect(() => {
+    if (!buscarAutomatico || autoResuelto || clienteSeleccionado) return;
+    const encontrados = candidatos?.data ?? [];
+    if (encontrados.length === 1) {
+      seleccionarCliente(encontrados[0]);
+      setAutoResuelto(true);
+    }
+  }, [candidatos, buscarAutomatico, autoResuelto, clienteSeleccionado]);
+
+  /**
+   * Da de alta al cliente con lo que ya trae el ticket, junto con su domicilio,
+   * y lo deja seleccionado. Es el caso de quien llama por primera vez: los
+   * datos están, solo faltaba que alguien los volviera a escribir.
+   */
+  const altaCliente = useMutation({
+    mutationFn: () =>
+      clientesApi.crear({
+        nombre: desdeTicket?.clienteNombre ?? '',
+        telefono: desdeTicket?.clienteTelefono || undefined,
+        domicilio: desdeTicket?.direccion ? { direccion: desdeTicket.direccion } : undefined,
+      }),
+    onSuccess: (cliente) => {
+      seleccionarCliente(cliente);
+      setAutoResuelto(true);
+      // El domicilio recién creado tiene que aparecer en el selector.
+      queryClient.invalidateQueries({ queryKey: ['domicilios', cliente.id] });
+      const primero = cliente.domicilios?.[0];
+      if (primero) setField('domicilio_id', primero.id);
+    },
+  });
+
+  const sugerencias = candidatos?.data ?? [];
+  const sinCandidatos = buscarAutomatico && !buscandoCandidatos && sugerencias.length === 0;
+  const variosCandidatos = buscarAutomatico && !clienteSeleccionado && sugerencias.length > 1;
 
   const seleccionarCliente = (cliente: Cliente) => {
     setClienteSeleccionado(cliente);
@@ -128,6 +247,8 @@ export default function NuevaOrdenPage() {
       falla: form.tipo === 'reparacion' && form.falla ? form.falla : undefined,
       sla_id: form.sla_id || undefined,
       fecha_programada: form.fecha_programada ? new Date(form.fecha_programada).toISOString() : undefined,
+      cuadrilla_id: form.cuadrilla_id || undefined,
+      ticket_beta_id: desdeTicket?.ticketBetaId,
     };
     createMutation.mutate(payload);
   };
@@ -151,7 +272,10 @@ export default function NuevaOrdenPage() {
 
       {desdeTicket && (
         <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 text-sm text-blue-800 dark:text-blue-300">
-          Creando orden desde ticket de <strong>{desdeTicket.clienteNombre}</strong>. Completá los datos que faltan.
+          Creando orden desde el ticket de <strong>{desdeTicket.clienteNombre}</strong>.{' '}
+          {desdeTicket.clienteId
+            ? 'El cliente y el domicilio ya vienen cargados.'
+            : 'Ese ticket no estaba ligado a un cliente del padrón, así que hay que elegirlo acá.'}
         </div>
       )}
 
@@ -230,6 +354,63 @@ export default function NuevaOrdenPage() {
               <Check className="w-3.5 h-3.5" /> Cliente seleccionado
             </p>
           )}
+
+          {/* Viniendo de un ticket sin cliente del padrón: se resuelve acá, sin
+              obligar a buscar de nuevo lo que el ticket ya dice. */}
+          {buscandoCandidatos && !clienteSeleccionado && (
+            <p className="mt-1 text-xs text-slate-400">Buscando al cliente en el padrón…</p>
+          )}
+
+          {variosCandidatos && (
+            <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 p-2 space-y-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 px-1">
+                Hay más de un cliente que coincide con «{claveBusqueda}». Elegí cuál es:
+              </p>
+              {sugerencias.map((c) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-slate-50 dark:hover:bg-slate-700"
+                  onClick={() => {
+                    seleccionarCliente(c);
+                    setAutoResuelto(true);
+                  }}
+                >
+                  <span className="font-medium text-slate-900 dark:text-white">{c.nombre}</span>
+                  {c.telefono && <span className="text-slate-400"> · {c.telefono}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {sinCandidatos && !clienteSeleccionado && (
+            <div className="mt-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 p-3">
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                <b>{desdeTicket?.clienteNombre || 'El cliente del ticket'}</b> no está en el padrón.
+              </p>
+              {(desdeTicket?.clienteTelefono || desdeTicket?.direccion) && (
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {[desdeTicket?.clienteTelefono, desdeTicket?.direccion].filter(Boolean).join(' · ')}
+                </p>
+              )}
+              {altaCliente.isError && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                  {mensajeDeError(altaCliente.error)}
+                </p>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-2"
+                loading={altaCliente.isPending}
+                disabled={!desdeTicket?.clienteNombre}
+                onClick={() => altaCliente.mutate()}
+              >
+                Darlo de alta con estos datos
+              </Button>
+            </div>
+          )}
         </div>
 
         <Select
@@ -243,6 +424,21 @@ export default function NuevaOrdenPage() {
           disabled={!form.cliente_id || cargandoDomicilios}
           onChange={(e) => setField('domicilio_id', e.target.value)}
         />
+
+        {/* El responsable no se elige: sale de esta cuadrilla. */}
+        <div>
+          <Select
+            label="Cuadrilla"
+            placeholder="Asignar después"
+            value={form.cuadrilla_id}
+            options={(cuadrillasData?.data ?? []).map((c) => ({ value: c.id, label: c.nombre }))}
+            onChange={(e) => setField('cuadrilla_id', e.target.value)}
+          />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Si la elegís, la orden nace asignada y el responsable sale de esa cuadrilla. Si la dejás vacía, queda
+            pendiente y se asigna desde el detalle.
+          </p>
+        </div>
 
         <OrdenCamposComunes
           values={form}

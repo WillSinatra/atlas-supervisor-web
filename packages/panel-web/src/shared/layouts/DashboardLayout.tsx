@@ -7,14 +7,21 @@ import { useBreadcrumbStore } from '@/shared/stores/breadcrumbStore';
 import { cn } from '@/shared/utils/cn';
 import { Logo } from '@/shared/components/Logo';
 import NotificationsDropdown from '@/shared/components/NotificationsDropdown';
+import NotificationPermissionBanner from '@/shared/components/NotificationPermissionBanner';
+import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard,
   ClipboardList,
   FileText,
+  ListChecks,
   Users,
   UserCircle,
+  Briefcase,
+  Package,
   BarChart3,
   Settings,
+  ShieldCheck,
+  CheckSquare,
   LogOut,
   Search,
   Menu,
@@ -28,14 +35,31 @@ import {
   Moon,
 } from 'lucide-react';
 
-const navigation = [
+interface ItemNavegacion {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+  /** El pañolero solo trabaja con materiales: el resto no le aparece. */
+  ocultarPara?: string[];
+}
+
+const navigation: ItemNavegacion[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Órdenes de Trabajo', href: '/orders', icon: ClipboardList },
-  { name: 'Tickets', href: '/tickets', icon: FileText },
-  { name: 'Cuadrillas', href: '/crews', icon: Users },
-  { name: 'Clientes', href: '/customers', icon: UserCircle },
-  { name: 'Reportes', href: '/reports', icon: BarChart3 },
-  { name: 'Configuración', href: '/settings', icon: Settings },
+  { name: 'Órdenes de Trabajo', href: '/orders', icon: ClipboardList, ocultarPara: ['panolero'] },
+  { name: 'Tickets', href: '/tickets', icon: FileText, ocultarPara: ['panolero'] },
+  // Módulo nuevo, en pruebas. Cuando reemplace al anterior, este pasa a ser
+  // "Tickets" y el de arriba se borra.
+  { name: 'Soporte', href: '/soporte', icon: ShieldCheck, ocultarPara: ['panolero', 'tecnico'] },
+  // Tareas internas: las ve todo el mundo, incluido el pañol y quien limpia.
+  { name: 'Tareas', href: '/tareas', icon: ListChecks },
+  { name: 'Cuadrillas', href: '/crews', icon: Users, ocultarPara: ['panolero'] },
+  { name: 'Empleados', href: '/empleados', icon: Briefcase, ocultarPara: ['panolero'] },
+  { name: 'Materiales', href: '/materiales', icon: Package },
+  // Plantillas de checklist: define lo que el técnico releva en el sitio.
+  { name: 'Checklists', href: '/checklists', icon: CheckSquare, ocultarPara: ['panolero', 'tecnico', 'operador'] },
+  { name: 'Clientes', href: '/customers', icon: UserCircle, ocultarPara: ['panolero'] },
+  { name: 'Reportes', href: '/reports', icon: BarChart3, ocultarPara: ['panolero'] },
+  { name: 'Configuración', href: '/settings', icon: Settings, ocultarPara: ['panolero'] },
 ];
 
 // Etiqueta en español para el primer segmento de cada módulo en el breadcrumb.
@@ -43,6 +67,10 @@ const etiquetasSegmento: Record<string, string> = {
   dashboard: 'Dashboard',
   orders: 'Órdenes de Trabajo',
   crews: 'Cuadrillas',
+  empleados: 'Empleados',
+  materiales: 'Materiales',
+  soporte: 'Soporte',
+  checklists: 'Checklists',
   customers: 'Clientes',
   reports: 'Reportes',
   settings: 'Configuración',
@@ -83,6 +111,7 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+      <NotificationPermissionBanner />
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
@@ -109,7 +138,9 @@ export default function DashboardLayout() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-custom overflow-x-hidden">
-          {navigation.map((item) => {
+          {navigation
+            .filter((item) => !item.ocultarPara?.includes(user?.rol ?? ''))
+            .map((item) => {
             const isActive = location.pathname.startsWith(item.href);
             return (
               <NavLink
@@ -156,7 +187,7 @@ export default function DashboardLayout() {
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
-                  {user?.rol === 'admin' ? 'Admin' : user?.rol === 'planificador' ? 'Planificador' : user?.rol === 'despachador' ? 'Despachador' : user?.rol === 'tecnico' ? 'Técnico' : user?.rol === 'operador' ? 'Operador' : 'Usuario'}
+                  {user?.rol === 'admin' ? 'Admin' : user?.rol === 'planificador' ? 'Planificador' : user?.rol === 'despachador' ? 'Despachador' : user?.rol === 'tecnico' ? 'Técnico' : user?.rol === 'operador' ? 'Operador' : user?.rol === 'panolero' ? 'Pañolero' : 'Usuario'}
                 </p>
               </div>
             )}

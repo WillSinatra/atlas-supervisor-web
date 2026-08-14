@@ -1,13 +1,17 @@
-import type { CostsReport, CrewProductivity, RecurrenceEntry, SatisfactionReport, SlaComplianceReport, WorkOrder } from '@/types';
+import type { CostsReport, CrewProductivity, RecurrenceEntry, SatisfactionReport, SlaComplianceReport, TasksClosedGroup, TasksClosedIndex } from '@/types';
 import { mockCostEntries, mockSatisfactionRatings, mockComplaints, findAddress, type ComplaintEntry } from './mocks/reports.mock';
-import { mockOrders } from './mocks/orders.mock';
-import { mockCrews } from './mocks/crews.mock';
 import { mockCustomers } from './mocks/customers.mock';
+import { mockCrews } from './mocks/crews.mock';
 import { simulateDelay } from './mocks/delay';
+import { ordenesApi, cuadrillasApi, slasApi } from './api';
+import { tareasApi } from './tareas';
+import type { Orden } from '@/types/atlas';
 
-// NOTA: esta capa hoy sirve datos mock. Cuando el backend esté disponible, cada
-// función se reemplaza internamente por una llamada a `api` (mismo nombre, misma
-// firma, mismo tipo de retorno) y ninguna pantalla que la consuma necesita cambios.
+// NOTA: esta capa servía datos 100% mock. SLA compliance y productividad ya
+// están contra la API real (GET /v1/ordenes, agregado acá porque no existe
+// /v1/reports/*). Costos, recurrencias y satisfacción siguen en mock: no hay
+// ningún endpoint de precio unitario, reclamos ni encuestas en la API — mismo
+// motivo por el que <CostsSection /> está oculta en ReportsPage.
 
 export interface ReportsFilters {
   dateFrom: string; // yyyy-mm-dd
@@ -17,6 +21,36 @@ export interface ReportsFilters {
 function inRange(iso: string, filters: ReportsFilters): boolean {
   const date = iso.slice(0, 10);
   return date >= filters.dateFrom && date <= filters.dateTo;
+}
+
+/** Minutos entre dos fechas ISO de la API real. */
+function minutesBetween(startIso: string, endIso: string): number {
+  return (new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000;
+}
+
+/**
+ * Órdenes completadas en el período, con el nombre de cuadrilla y el SLA ya
+ * resueltos. No hay filtro de fecha "hasta" en la API real (solo
+ * `fecha_desde`, y filtra por creación, no por cierre) así que se trae un lote
+ * grande de completadas y se filtra acá por `completada_en`. Alcanza para el
+ * volumen actual; si crece, esto pasa a paginar o a pedir un endpoint de
+ * reportes de verdad.
+ */
+async function ordenesCompletadasEnPeriodo(filters: ReportsFilters) {
+  const [ordenesRes, cuadrillasRes, slas] = await Promise.all([
+    ordenesApi.listar({ estado: 'completada', per_page: 500 }),
+    cuadrillasApi.listar(),
+    slasApi.listar(),
+  ]);
+
+  const nombrePorCuadrilla = new Map(cuadrillasRes.data.map((c) => [c.id, c.nombre]));
+  const slaPorId = new Map(slas.map((s) => [s.id, s]));
+
+  const ordenes = ordenesRes.data.filter((o): o is Orden & { completada_en: string } =>
+    !!o.completada_en && inRange(o.completada_en, filters),
+  );
+
+  return { ordenes, nombrePorCuadrilla, slaPorId };
 }
 
 export async function getCostsReport(filters: ReportsFilters): Promise<CostsReport> {
@@ -48,65 +82,79 @@ export async function getCostsReport(filters: ReportsFilters): Promise<CostsRepo
   return simulateDelay({ totalPeriod, byCrew, byMaterial });
 }
 
-export async function getProductivityReport(filters: ReportsFilters): Promise<CrewProductivity[]> {
-  const closedOrders = mockOrders.filter(
-    (o) => o.status === 'COMPLETED' && o.completedAt && inRange(o.completedAt, filters),
-  );
+/**
+ * Todas las órdenes creadas en el período (cualquier estado), para calcular
+ * productividad real por cuadrilla. La API real solo filtra por
+ * `fecha_desde` (y por creación, no por cierre), así que se trae un lote
+ * grande y se filtra acá por `creado_en`.
+ */
+async function ordenesCreadasEnPeriodo(filters: ReportsFilters) {
+  const [ordenesRes, cuadrillasRes] = await Promise.all([
+    ordenesApi.listar({ per_page: 500 }),
+    cuadrillasApi.listar(),
+  ]);
 
-  const result = mockCrews.map((crew) => {
-    const crewOrders = closedOrders.filter((o) => o.crewId === crew.id);
-    const totalMinutes = crewOrders.reduce((sum, o) => {
-      const start = o.startedAt ?? o.createdAt;
-      const end = o.completedAt!;
-      return sum + (new Date(end).getTime() - new Date(start).getTime()) / 60000;
-    }, 0);
+  const nombrePorCuadrilla = new Map(cuadrillasRes.data.map((c) => [c.id, c.nombre]));
+  const ordenes = ordenesRes.data.filter((o) => inRange(o.creado_en, filters));
+
+  return { ordenes, nombrePorCuadrilla };
+}
+
+const ESTADOS_ORDEN = ['pendiente', 'asignada', 'aceptada', 'en_proceso', 'completada', 'cancelada'] as const;
+
+export async function getProductivityReport(filters: ReportsFilters): Promise<CrewProductivity[]> {
+  const { ordenes, nombrePorCuadrilla } = await ordenesCreadasEnPeriodo(filters);
+
+  const porCuadrilla = new Map<string, Orden[]>();
+  for (const o of ordenes) {
+    const key = o.cuadrilla_id ?? 'sin-asignar';
+    const list = porCuadrilla.get(key) ?? [];
+    list.push(o);
+    porCuadrilla.set(key, list);
+  }
+
+  const result: CrewProductivity[] = [...porCuadrilla.entries()].map(([cuadrillaId, ords]) => {
+    const completadas = ords.filter((o) => o.estado === 'completada' && o.completada_en);
+    const totalMinutes = completadas.reduce((sum, o) => sum + minutesBetween(o.creado_en, o.completada_en!), 0);
+
+    const breakdown = ESTADOS_ORDEN.reduce((acc, estado) => {
+      acc[estado] = ords.filter((o) => o.estado === estado).length;
+      return acc;
+    }, {} as CrewProductivity['breakdown']);
+
     return {
-      id: crew.id,
-      name: crew.name,
-      code: crew.code,
-      specialty: crew.specialty,
-      completedOrders: crewOrders.length,
-      averageTime: crewOrders.length ? Math.round(totalMinutes / crewOrders.length) : 0,
+      id: cuadrillaId,
+      name: nombrePorCuadrilla.get(cuadrillaId) ?? 'Sin asignar',
+      code: '',
+      completedOrders: completadas.length,
+      averageTime: completadas.length ? Math.round(totalMinutes / completadas.length) : 0,
+      totalOrders: ords.length,
+      productivityRate: ords.length ? Math.round((completadas.length / ords.length) * 100) : 0,
+      breakdown,
     };
   });
 
-  return simulateDelay(result);
-}
-
-function customerType(customerId: string): 'Residencial' | 'Empresarial' {
-  const customer = mockCustomers.find((c) => c.id === customerId);
-  return customer?.businessName ? 'Empresarial' : 'Residencial';
+  return result.sort((a, b) => b.totalOrders - a.totalOrders);
 }
 
 export async function getSlaComplianceReport(filters: ReportsFilters): Promise<SlaComplianceReport> {
-  const closedOrders = mockOrders.filter(
-    (o) => o.status === 'COMPLETED' && o.completedAt && o.sla && inRange(o.completedAt, filters),
-  );
+  const { ordenes, nombrePorCuadrilla, slaPorId } = await ordenesCompletadasEnPeriodo(filters);
+  const ordenesConSla = ordenes.filter((o) => o.sla_id && slaPorId.has(o.sla_id));
 
-  const isWithinSla = (o: WorkOrder) => {
-    const start = new Date(o.startedAt ?? o.createdAt).getTime();
-    const end = new Date(o.completedAt!).getTime();
-    const minutes = (end - start) / 60000;
-    return minutes <= o.sla!.resolveTime;
+  const isWithinSla = (o: Orden) => {
+    const sla = slaPorId.get(o.sla_id!)!;
+    return minutesBetween(o.creado_en, o.completada_en!) <= sla.tiempo_resolucion;
   };
 
   const crewMap = new Map<string, { name: string; total: number; within: number }>();
-  const typeMap = new Map<string, { name: string; total: number; within: number }>();
 
-  for (const o of closedOrders) {
+  for (const o of ordenesConSla) {
     const within = isWithinSla(o);
-
-    const crewId = o.crewId ?? 'sin-asignar';
-    const crewEntry = crewMap.get(crewId) ?? { name: o.crew?.name ?? 'Sin asignar', total: 0, within: 0 };
+    const crewId = o.cuadrilla_id ?? 'sin-asignar';
+    const crewEntry = crewMap.get(crewId) ?? { name: nombrePorCuadrilla.get(crewId) ?? 'Sin asignar', total: 0, within: 0 };
     crewEntry.total += 1;
     if (within) crewEntry.within += 1;
     crewMap.set(crewId, crewEntry);
-
-    const type = customerType(o.customerId);
-    const typeEntry = typeMap.get(type) ?? { name: type, total: 0, within: 0 };
-    typeEntry.total += 1;
-    if (within) typeEntry.within += 1;
-    typeMap.set(type, typeEntry);
   }
 
   const toGroups = (map: Map<string, { name: string; total: number; within: number }>) =>
@@ -120,7 +168,48 @@ export async function getSlaComplianceReport(filters: ReportsFilters): Promise<S
       }))
       .sort((a, b) => b.totalOrders - a.totalOrders);
 
-  return simulateDelay({ byCrew: toGroups(crewMap), byCustomerType: toGroups(typeMap) });
+  // No hay campo de tipo de cliente (empresa/residencial) en /v1/clientes:
+  // no se inventa el dato, se deja vacío hasta que la API lo tenga.
+  return { byCrew: toGroups(crewMap), byCustomerType: [] };
+}
+
+/**
+ * Índice de tareas internas cerradas (Pedido 10). A diferencia de las OT, la
+ * tarea no tiene cuadrilla — se agrupa por área y por empleado, que son los
+ * únicos destinos reales que tiene (ver SelectorDestino). `todas: true`
+ * porque acá interesa el total del equipo, no solo lo mío.
+ */
+export async function getTasksClosedIndex(filters: ReportsFilters): Promise<TasksClosedIndex> {
+  const res = await tareasApi.listar({ todas: true, per_page: 500 });
+  const tareas = res.data.filter((t) => inRange(t.creado_en, filters));
+
+  const total = tareas.length;
+  const cerradas = tareas.filter((t) => t.estado === 'hecha');
+  const avgItemsPerTask = total ? tareas.reduce((sum, t) => sum + t.items_total, 0) / total : 0;
+
+  const group = (getKey: (t: (typeof tareas)[number]) => { id: string; name: string } | null): TasksClosedGroup[] => {
+    const map = new Map<string, { name: string; total: number; closed: number }>();
+    for (const t of tareas) {
+      const key = getKey(t);
+      if (!key) continue;
+      const entry = map.get(key.id) ?? { name: key.name, total: 0, closed: 0 };
+      entry.total += 1;
+      if (t.estado === 'hecha') entry.closed += 1;
+      map.set(key.id, entry);
+    }
+    return [...map.entries()]
+      .map(([id, v]) => ({ id, name: v.name, total: v.total, closed: v.closed, rate: v.total ? Math.round((v.closed / v.total) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total);
+  };
+
+  return {
+    total,
+    closed: cerradas.length,
+    rate: total ? Math.round((cerradas.length / total) * 100) : 0,
+    avgItemsPerTask: Math.round(avgItemsPerTask * 10) / 10,
+    byArea: group((t) => (t.area ? { id: t.area.id, name: t.area.nombre } : null)),
+    byEmployee: group((t) => (t.empleado ? { id: t.empleado.id, name: t.empleado.nombre } : null)),
+  };
 }
 
 export async function getRecurrencesReport(filters: ReportsFilters): Promise<RecurrenceEntry[]> {

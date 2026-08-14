@@ -8,13 +8,18 @@ import type {
   Domicilio,
   Cuadrilla,
   Usuario,
+  Perfil,
   Archivo,
   EventoOrden,
   Tecnico,
   Vehiculo,
+  MantenimientoVehiculo,
+  FlotaGps,
   TicketBeta,
   CrearOrdenInput,
   EditarOrdenInput,
+  ResultadoCascada,
+  OfertaDespacho,
 } from '../../types/atlas';
 
 /**
@@ -39,8 +44,20 @@ export const api: AxiosInstance = axios.create({
 
 export interface UsuarioSesion {
   id: string;
-  rol: 'admin' | 'planificador' | 'despachador' | 'tecnico' | 'operador';
+  rol: 'admin' | 'planificador' | 'despachador' | 'tecnico' | 'operador' | 'panolero';
   cuadrilla_id: string | null;
+  /**
+   * Desde el Pedido 9 la cuenta cuelga de un empleado del padrón y la API
+   * devuelve también estos campos. Son opcionales porque una sesión guardada
+   * de antes de ese cambio no los tiene.
+   */
+  nombre?: string;
+  email?: string;
+  empleado_id?: string | null;
+  acceso_panel?: boolean;
+  acceso_app?: boolean;
+  /** Para la app móvil: el técnico de cuadrilla ligado a ese empleado. */
+  tecnico_id?: string | null;
 }
 
 export const sesion = {
@@ -62,83 +79,140 @@ export const sesion = {
   },
 };
 
-// Interceptor para agregar token
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = sesion.getAccess();
+/**
+ * Renovación del access token.
+ *
+ * El access dura 15 minutos, el refresh 30 días, y la API **no rota** el
+ * refresh: el original se conserva y sirve para renovar todas las veces que
+ * haga falta.
+ *
+ * Hay dos caminos, y el que importa es el primero:
+ *
+ * 1. **Antes de que venza.** Cada request mira cuánto le queda al token y, si
+ *    está por expirar, lo renueva antes de salir. Trabajando normalmente nunca
+ *    se llega a ver un 401.
+ * 2. **Después de un 401**, como red de seguridad: si igual salió con el token
+ *    vencido (la pestaña estuvo dormida, el reloj se corrió), se renueva y se
+ *    reintenta la request original una sola vez.
+ *
+ * Las renovaciones concurrentes comparten una única promesa: diez requests que
+ * salen juntas disparan un solo refresh, no diez.
+ */
+
+/** Cuántos segundos le quedan al token, o null si no se puede leer. */
+function segundosRestantes(token: string | null): number | null {
+  if (!token) return null;
+  const partes = token.split('.');
+  if (partes.length !== 3) return null;
+  try {
+    const payload = JSON.parse(atob(partes[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp === 'number' ? payload.exp - Math.floor(Date.now() / 1000) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Margen con el que se renueva por adelantado. */
+const MARGEN_RENOVACION = 90;
+
+/** Solo esto significa "tu sesión terminó". Un corte de red NO. */
+class SesionVencida extends Error {}
+
+let renovacion: Promise<string> | null = null;
+
+async function renovarAccess(): Promise<string> {
+  if (renovacion) return renovacion;
+
+  renovacion = (async () => {
+    const refreshToken = sesion.getRefresh();
+    if (!refreshToken) throw new SesionVencida('No hay refresh token');
+
+    try {
+      // Con axios pelado a propósito: si usara la instancia, entraría de nuevo
+      // en este mismo interceptor.
+      const { data } = await axios.post<{ accessToken: string }>(
+        `${API_URL}/v1/auth/refresh`,
+        { refreshToken },
+        { headers: { 'Content-Type': 'application/json' }, timeout: 15000 },
+      );
+      localStorage.setItem('accessToken', data.accessToken);
+      return data.accessToken;
+    } catch (e) {
+      const estado = (e as AxiosError).response?.status;
+      // La sesión solo está muerta si el server lo dijo. Un corte de red o un
+      // 500 pasajero no pueden echar a nadie: eso era lo que dejaba a la gente
+      // afuera en medio del trabajo.
+      if (estado === 401 || estado === 403) {
+        throw new SesionVencida('El refresh token ya no sirve');
+      }
+      throw e;
+    }
+  })();
+
+  try {
+    return await renovacion;
+  } finally {
+    renovacion = null;
+  }
+}
+
+function cerrarSesionYSalir(): void {
+  sesion.limpiar();
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login';
+  }
+}
+
+const esEndpointDeAuth = (url?: string): boolean =>
+  !!url && (url.includes('/auth/login') || url.includes('/auth/refresh'));
+
+// Cada request lleva el token; y si está por vencerse, primero lo renueva.
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  let token = sesion.getAccess();
+
+  if (token && !esEndpointDeAuth(config.url)) {
+    const restan = segundosRestantes(token);
+    if (restan !== null && restan < MARGEN_RENOVACION) {
+      try {
+        token = await renovarAccess();
+      } catch (e) {
+        if (e instanceof SesionVencida) {
+          cerrarSesionYSalir();
+        }
+        // Si fue la red, se manda igual con el token que hay: puede que todavía
+        // sirva, y si no, el 401 de abajo lo reintenta.
+      }
+    }
+  }
+
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-/**
- * Refresh automático. El access token dura 15 minutos.
- *
- * Importante: la API devuelve { "accessToken": "..." } plano (sin envoltorio
- * "data") y NO rota el refresh token, así que el refresh original se conserva.
- *
- * Las requests que fallan mientras se está renovando quedan en cola y se
- * reintentan con el token nuevo, para no disparar varios refresh en paralelo.
- */
-let renovando = false;
-let cola: Array<(token: string | null) => void> = [];
-
-const procesarCola = (token: string | null) => {
-  cola.forEach((resolver) => resolver(token));
-  cola = [];
-};
-
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-    const isAuthEndpoint =
-      originalRequest?.url?.includes('/auth/login') || originalRequest?.url?.includes('/auth/refresh');
+    const original = error.config as (InternalAxiosRequestConfig & { _reintentada?: boolean }) | undefined;
 
-    if (error.response?.status !== 401 || !originalRequest || originalRequest._retry || isAuthEndpoint) {
+    if (error.response?.status !== 401 || !original || original._reintentada || esEndpointDeAuth(original.url)) {
       return Promise.reject(error);
     }
 
-    if (renovando) {
-      return new Promise((resolve, reject) => {
-        cola.push((token) => {
-          if (!token) return reject(error);
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-          }
-          resolve(api(originalRequest));
-        });
-      });
-    }
-
-    originalRequest._retry = true;
-    renovando = true;
+    original._reintentada = true;
 
     try {
-      const refreshToken = sesion.getRefresh();
-      if (!refreshToken) throw new Error('No refresh token');
-
-      // Respuesta: { accessToken: "..." }
-      const { data } = await axios.post<{ accessToken: string }>(
-        `${API_URL}/v1/auth/refresh`,
-        { refreshToken },
-        { headers: { 'Content-Type': 'application/json' } },
-      );
-
-      localStorage.setItem('accessToken', data.accessToken);
-      procesarCola(data.accessToken);
-
-      if (originalRequest.headers) {
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+      const token = await renovarAccess();
+      if (original.headers) {
+        original.headers.Authorization = `Bearer ${token}`;
       }
-      return api(originalRequest);
-    } catch {
-      procesarCola(null);
-      sesion.limpiar();
-      window.location.href = '/login';
+      return await api(original);
+    } catch (e) {
+      if (e instanceof SesionVencida) {
+        cerrarSesionYSalir();
+      }
       return Promise.reject(error);
-    } finally {
-      renovando = false;
     }
   },
 );
@@ -154,7 +228,11 @@ export interface ApiError {
 /** Mensaje legible del envoltorio de error de la API. */
 export function mensajeDeError(e: unknown): string {
   const err = e as AxiosError<ApiError>;
-  return err.response?.data?.message ?? 'No se pudo conectar con el servidor.';
+  if (err?.response?.data?.message) return err.response.data.message;
+  // Los errores que arma el propio panel (validaciones del respaldo local, por
+  // ejemplo) ya traen un mensaje en español: mostrarlo en vez del genérico.
+  if (!err?.isAxiosError && e instanceof Error && e.message) return e.message;
+  return 'No se pudo conectar con el servidor.';
 }
 
 /** Campos que la API marcó como inválidos (VALIDATION_ERROR). */
@@ -186,7 +264,13 @@ export const authApi = {
       accessToken: string;
       refreshToken: string;
       user: UsuarioSesion;
-    }>('/v1/auth/login', credenciales);
+    }>('/v1/auth/login', {
+      ...credenciales,
+      // El panel web y la app del técnico son dos sistemas distintos: cada
+      // cuenta declara a cuál entra. Si no tiene habilitado este, la API
+      // responde 403 con el motivo (en vez de dejar entrar a cualquiera).
+      sistema: 'panel',
+    });
     sesion.guardar(data.accessToken, data.refreshToken, data.user);
     return data;
   },
@@ -237,6 +321,24 @@ export const ordenesApi = {
     const { data } = await api.patch<Orden>(`/v1/ordenes/${id}`, payload);
     return data;
   },
+  /**
+   * Arranca la cascada: le ofrece la orden a la cuadrilla disponible más
+   * cercana y, si no responde, el cron se la pasa a la siguiente.
+   *
+   * Devuelve 200 aunque no haya ofrecido: `motivo` explica por qué (fuera de
+   * horario, domicilio sin coordenadas, nadie cerca).
+   */
+  /** Cómo va la cascada: a quién se le ofreció y qué contestó. */
+  async ofertas(id: string) {
+    const { data } = await api.get<{ orden_id: string; ofertas: OfertaDespacho[] }>(
+      `/v1/ordenes/${id}/ofertas`,
+    );
+    return data.ofertas;
+  },
+  async dispararCascada(id: string) {
+    const { data } = await api.post<ResultadoCascada>(`/v1/ordenes/${id}/despacho/cascada`);
+    return data;
+  },
   async asignar(id: string, cuadrilla_id: string) {
     const { data } = await api.post<Orden>(`/v1/ordenes/${id}/assign`, { cuadrilla_id });
     return data;
@@ -274,11 +376,69 @@ export const ticketsBetaApi = {
     const { data } = await api.get<RespuestaPaginada<TicketBeta>>("/v1/tickets-beta", { params });
     return data;
   },
+  /** Corregir un ticket ya cargado. Se puede tocar todo, estado incluido. */
+  async actualizar(id: string, payload: Partial<TicketBeta>) {
+    const { data } = await api.patch<TicketBeta>(`/v1/tickets-beta/${id}`, payload);
+    return data;
+  },
+  /**
+   * Cierra el reclamo sin generar orden de trabajo: es el desenlace normal
+   * cuando N2 lo resuelve por teléfono. La resolución se agrega a la
+   * descripción, no la pisa.
+   */
+  async resolver(id: string, resolucion: string) {
+    const { data } = await api.post<TicketBeta>(`/v1/tickets-beta/${id}/resolver`, { resolucion });
+    return data;
+  },
+  async reabrir(id: string) {
+    const { data } = await api.post<TicketBeta>(`/v1/tickets-beta/${id}/reabrir`);
+    return data;
+  },
 };
 
 // --------------------------------------------------------------- archivos ---
 
+/**
+ * El id del archivo, venga solo o dentro de su ruta.
+ *
+ * La API devuelve el id pelado en el listado de fotos, pero guarda la ruta
+ * completa en `orden.firma_cliente` y `orden.foto_despues`. Las dos formas
+ * llegan al panel, así que se normalizan acá en vez de en cada llamador.
+ */
+function idODesdeRuta(valor: string): string {
+  const limpio = valor.trim().replace(/\/+$/, '');
+  return limpio.includes('/') ? limpio.slice(limpio.lastIndexOf('/') + 1) : limpio;
+}
+
 export const archivosApi = {
+  /**
+   * Adjunta una imagen al ticket. Se pueden subir varias: la foto que manda el
+   * cliente suele explicar el reclamo mejor que la descripción.
+   */
+  async subirFotoTicket(ticketId: string, archivo: File) {
+    const form = new FormData();
+    form.append('archivo', archivo);
+    const { data } = await api.post<Archivo>(`/v1/tickets-beta/${ticketId}/fotos`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
+  async fotosDeTicket(ticketId: string) {
+    const { data } = await api.get<{ ticket_id: string; fotos: Archivo[] }>(
+      `/v1/tickets-beta/${ticketId}/fotos`,
+    );
+    return data.fotos;
+  },
+
+  /** Solo adjuntos de ticket: la evidencia de una orden no se borra. */
+  async eliminar(archivoId: string) {
+    const { data } = await api.delete<{ id: string; eliminado: boolean }>(
+      `/v1/archivos/${archivoId}`,
+    );
+    return data;
+  },
+
   async subirFirma(ordenId: string, archivo: File) {
     const form = new FormData();
     form.append('archivo', archivo);
@@ -310,9 +470,15 @@ export const archivosApi = {
    * La descarga exige el header Authorization, así que un <img src="/v1/archivos/x">
    * directo devuelve 401. Se baja como blob y se arma un object URL.
    * Acordate de revocarlo con URL.revokeObjectURL() al desmontar.
+   *
+   * Acepta tanto el id pelado como la ruta completa: `orden.firma_cliente` y
+   * `orden.foto_despues` guardan la **URL** del archivo (`/v1/archivos/{id}`),
+   * no el id —el campo está definido como "referencia/URL"—, y pasarlos tal
+   * cual armaba `/v1/archivos//v1/archivos/{id}` y devolvía 404.
    */
-  async urlDeArchivo(archivoId: string) {
-    const { data } = await api.get<Blob>(`/v1/archivos/${archivoId}`, { responseType: 'blob' });
+  async urlDeArchivo(idORuta: string) {
+    const id = idODesdeRuta(idORuta);
+    const { data } = await api.get<Blob>(`/v1/archivos/${id}`, { responseType: 'blob' });
     return URL.createObjectURL(data);
   },
 };
@@ -356,6 +522,14 @@ export const clientesApi = {
     const { data } = await api.post<Domicilio>(`/v1/clientes/${id}/domicilios`, payload);
     return data;
   },
+  /** Corregir la dirección o cargarle las coordenadas a un domicilio ya creado. */
+  async actualizarDomicilio(
+    domicilioId: string,
+    payload: { direccion?: string; lat?: number | null; lng?: number | null },
+  ) {
+    const { data } = await api.patch<Domicilio>(`/v1/domicilios/${domicilioId}`, payload);
+    return data;
+  },
   async eliminarDomicilio(domicilioId: string) {
     const { data } = await api.delete<{ id: string; eliminado: boolean }>(
       `/v1/domicilios/${domicilioId}`,
@@ -379,9 +553,21 @@ export const cuadrillasApi = {
     const { data } = await api.post<Cuadrilla>('/v1/cuadrillas', payload);
     return data;
   },
-  // El backend real solo acepta estos 4 campos en el PATCH; codigo/especialidad/zona
-  // (Pedido 4 a Cristian, sin arrancar) tiran 400 si se incluyen, aunque no cambien.
-  async actualizar(id: string, payload: Partial<{ nombre: string; estado: string; lat: number; lng: number }>) {
+  // codigo, especialidad y zona ya se pueden editar: el PATCH del backend los
+  // acepta desde el Pedido 11. Antes tiraban 400 y por eso el panel los mostraba
+  // deshabilitados.
+  async actualizar(
+    id: string,
+    payload: Partial<{
+      nombre: string;
+      estado: string;
+      codigo: string | null;
+      especialidad: string | null;
+      zona: string | null;
+      lat: number;
+      lng: number;
+    }>,
+  ) {
     const { data } = await api.patch<Cuadrilla>(`/v1/cuadrillas/${id}`, payload);
     return data;
   },
@@ -389,7 +575,12 @@ export const cuadrillasApi = {
     const { data } = await api.delete<{ id: string; eliminado: boolean }>(`/v1/cuadrillas/${id}`);
     return data;
   },
-  async agregarTecnico(cuadrillaId: string, payload: { nombre: string; telefono?: string }) {
+  // Con empleado_id el técnico sale del padrón (forma nueva). El alta a mano
+  // con nombre suelto se mantiene por compatibilidad.
+  async agregarTecnico(
+    cuadrillaId: string,
+    payload: { empleado_id?: string; nombre?: string; telefono?: string },
+  ) {
     const { data } = await api.post<Tecnico>(`/v1/cuadrillas/${cuadrillaId}/tecnicos`, payload);
     return data;
   },
@@ -403,6 +594,29 @@ export const cuadrillasApi = {
   },
   async actualizarVehiculo(cuadrillaId: string, payload: Partial<Omit<Vehiculo, "id" | "cuadrilla_id">>) {
     const { data } = await api.patch<Vehiculo>(`/v1/cuadrillas/${cuadrillaId}/vehiculo`, payload);
+    return data;
+  },
+  /** Historial de servicios/reparaciones cargados por los técnicos al vehículo, más reciente primero. */
+  async mantenimientos(cuadrillaId: string) {
+    const { data } = await api.get<{
+      cuadrilla_id: string;
+      cuadrilla_nombre: string;
+      data: MantenimientoVehiculo[];
+    }>(`/v1/cuadrillas/${cuadrillaId}/mantenimientos`);
+    return data.data;
+  },
+};
+
+// -------------------------------------------------------- flota vehicular ---
+
+export const vehiculosApi = {
+  /**
+   * Posiciones del GPS externo, normalizadas y cacheadas por la API (la llama
+   * el backend, no el navegador). Cada unidad ya viene con la cuadrilla a la
+   * que pertenece, si la patente coincide con alguna.
+   */
+  async listar() {
+    const { data } = await api.get<FlotaGps>('/v1/vehiculos');
     return data;
   },
 };
@@ -430,6 +644,20 @@ export const usuariosApi = {
     const { data } = await api.delete<{ id: string; eliminado: boolean }>(`/v1/usuarios/${id}`);
     return data;
   },
+  /**
+   * Mi cuenta. A diferencia del resto de usuariosApi, estos dos no son solo
+   * para admin: cualquiera puede ver y editar lo suyo (nombre, email y
+   * teléfono). El teléfono va al padrón de empleados, que es donde vive.
+   */
+  async miPerfil() {
+    const { data } = await api.get<Perfil>('/v1/usuarios/me');
+    return data;
+  },
+  async actualizarMiPerfil(payload: { nombre?: string; email?: string; telefono?: string | null }) {
+    const { data } = await api.patch<Perfil>('/v1/usuarios/me', payload);
+    return data;
+  },
+
   /** Cambio de la contraseña propia (cualquier usuario autenticado). */
   async cambiarMiPassword(password_actual: string, password_nueva: string) {
     const { data } = await api.post<{ actualizado: boolean }>('/v1/usuarios/me/password', {
@@ -461,7 +689,10 @@ export const usuariosApi = {
  *   authApi.register / logout(server) / profile
  *   ordersApi.stats · crewsApi.map · crewsApi.updateLocation
  *   customersApi.byDocument
- *   reportsApi.*  ·  settingsApi.*  ·  notificationsApi.*
+ *   reportsApi.*  ·  settingsApi.*
+ *
+ * Las notificaciones SÍ existen desde el Pedido 10, pero viven en
+ * services/tareas.ts (`notificacionesApi`, en español como el resto de la API).
  * Las pantallas que los usen van a fallar hasta que se implementen en el back.
  * ------------------------------------------------------------------------- */
 export const ordersApi = ordenesApi;
@@ -473,15 +704,6 @@ export const usersApi = usuariosApi;
 const vacioPaginado = async () => ({
   data: { data: [], pagination: { page: 1, per_page: 0, total: 0, total_pages: 0 } },
 });
-
-export const notificationsApi = {
-  list: async (_params?: Record<string, unknown>) => ({
-    data: { data: [], pagination: { page: 1, per_page: 0, total: 0, total_pages: 0 } },
-  }),
-  unreadCount: async () => ({ data: { count: 0 } }),
-  markAsRead: async (_id: string) => ({ data: { ok: true } }),
-  markAllAsRead: async () => ({ data: { ok: true } }),
-};
 
 export const reportsApi = {
   kpi: vacioPaginado,

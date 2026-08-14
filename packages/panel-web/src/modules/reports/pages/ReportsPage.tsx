@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { DateRangeFilter, type DateRange } from '@/shared/components/ui/DateRangeFilter';
-import { CostsSection } from '../components/CostsSection';
 import { SlaComplianceSection } from '../components/SlaComplianceSection';
 import { ProductivitySection } from '../components/ProductivitySection';
+import { TasksClosedSection } from '../components/TasksClosedSection';
 import { RecurrencesSection } from '../components/RecurrencesSection';
 import { SatisfactionSection } from '../components/SatisfactionSection';
 
@@ -31,9 +31,16 @@ export default function ReportsPage() {
 
       <DateRangeFilter value={range} onChange={setRange} />
 
-      <CostsSection filters={range} />
+      {/*
+        Costos del período (por cuadrilla / por material) está oculta a propósito:
+        no hay endpoint de backend que devuelva precio unitario ni consumo de
+        materiales por orden (ni en la API remota de producción ni en packages/api
+        de este repo), así que mostrarla sería mock disfrazado de dato real.
+        Reactivar cuando exista ese endpoint — ver <CostsSection /> y reportsService.ts.
+      */}
       <SlaComplianceSection filters={range} />
       <ProductivitySection filters={range} />
+      <TasksClosedSection filters={range} />
       <RecurrencesSection filters={range} />
       <SatisfactionSection filters={range} />
     </div>
