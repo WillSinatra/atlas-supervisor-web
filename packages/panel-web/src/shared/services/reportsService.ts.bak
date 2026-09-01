@@ -179,76 +179,83 @@ export async function getSlaComplianceReport(filters: ReportsFilters): Promise<S
  * únicos destinos reales que tiene (ver SelectorDestino). `todas: true`
  * porque acá interesa el total del equipo, no solo lo mío.
  */
-
 export async function getTasksClosedIndex(filters: ReportsFilters): Promise<TasksClosedIndex> {
-  const tareasRes = await tareasApi.listar({ todas: true, estado: 'hecha', desde: filters.dateFrom, hasta: filters.dateTo, per_page: 500 });
-  const tareas = tareasRes.data || [];
-  const ticketsRes = await api.get('/v1/tickets-beta', { params: { estado: 'resuelto', desde: filters.dateFrom, hasta: filters.dateTo, per_page: 500 } });
-  const tickets = ticketsRes.data || [];
+  const res = await api.get('/v1/reportes/tareas-cerradas');
   
-  const byAreaMap = new Map<string, number>();
-  for (const t of tareas) {
-    if (t.area?.id) byAreaMap.set(t.area.nombre || t.area.id, (byAreaMap.get(t.area.nombre || t.area.id) ?? 0) + 1);
-  }
-  for (const tk of tickets) {
-    const areaName = tk.area?.nombre || 'Sin área';
-    byAreaMap.set(areaName, (byAreaMap.get(areaName) ?? 0) + 2);
-  }
+  const data = res.data as Array<{
+    empleado: string;
+    area: string;
+    total: number;
+    tareas: number;
+    tickets: number;
+    ordenes: number;
+  }>;
+  const total = data.reduce((sum, row) => sum + row.total, 0);
+  const cerradas = total;
   
-  const byEmployeeMap = new Map<string, { id: string; name: string; count: number }>();
-  for (const t of tareas) {
-    if (t.empleado?.id) {
-      const entry = byEmployeeMap.get(t.empleado.id) ?? { id: t.empleado.id, name: t.empleado.nombre || t.empleado.id, count: 0 };
-      entry.count += 1;
-      byEmployeeMap.set(t.empleado.id, entry);
-    }
-  }
-  for (const tk of tickets) {
-    if (tk.resuelto_por) {
-      const entry = byEmployeeMap.get(tk.resuelto_por) ?? { id: tk.resuelto_por, name: tk.resuelto_por_nombre || tk.resuelto_por, count: 0 };
-      entry.count += 2;
-      byEmployeeMap.set(tk.resuelto_por, entry);
-    }
-  }
-  
-  const total = tareas.length + (tickets.length * 2);
+  const byArea = data
+    .filter(row => row.area && row.area !== 'Sin área')
+    .reduce((acc, row) => {
+      const existing = acc.find(a => a.name === row.area);
+      if (existing) {
+        existing.total += row.total;
+        existing.closed += row.total;
+      } else {
+        acc.push({ id: row.area, name: row.area, total: row.total, closed: row.total, rate: 100 });
+      }
+      return acc;
+    }, [] as TasksClosedGroup[]);
+  const byEmployee = data
+    .filter(row => row.empleado && row.empleado !== 'Sin asignar')
+    .map(row => ({ 
+      id: row.empleado, 
+      name: row.empleado, 
+      total: row.total, 
+      closed: row.total, 
+      rate: 100 
+    }));
   return {
     total,
-    closed: total,
-    rate: 100,
+    closed: cerradas,
+    rate: total ? 100 : 0,
     avgItemsPerTask: 0,
-    byArea: [...byAreaMap.entries()].map(([n, c]) => ({ id: n, name: n, total: c, closed: c, rate: 100 })).sort((a, b) => b.closed - a.closed),
-    byEmployee: [...byEmployeeMap.values()].map(e => ({ id: e.id, name: e.name, total: e.count, closed: e.count, rate: 100 })).sort((a, b) => b.closed - a.closed),
+    byArea,
+    byEmployee,
   };
 }
 
+
 export async function getRecurrencesReport(filters: ReportsFilters): Promise<RecurrenceEntry[]> {
-  // Buscar en TODOS los estados
-  const estados = ['nuevo', 'resuelto', 'convertido_a_ot'];
-  let allTickets: any[] = [];
-  
-  for (const estado of estados) {
-    const res = await api.get('/v1/tickets-beta', { params: { estado, desde: filters.dateFrom, hasta: filters.dateTo, per_page: 500 } });
-    allTickets = allTickets.concat(res.data || []);
+  const complaints = mockComplaints.filter((c) => inRange(c.date, filters));
+
+  const byAddress = new Map<string, ComplaintEntry[]>();
+  for (const c of complaints) {
+    const list = byAddress.get(c.addressId) ?? [];
+    list.push(c);
+    byAddress.set(c.addressId, list);
   }
-  
-  const tickets = allTickets;
-  const byClient = new Map<string, any[]>();
-  for (const t of tickets) {
-    const name = t.cliente || 'Desconocido';
-    const list = byClient.get(name) ?? [];
-    list.push(t);
-    byClient.set(name, list);
-  }
+
   const result: RecurrenceEntry[] = [];
-  for (const [name, list] of byClient) {
-    if (list.length < 3) continue;  // ← 3+, todos los estados
-    result.push({ addressId: name, customerName: name, addressLabel: list[0].direccion || '—', claimsCount: list.length, lastClaimDate: list[0].creado_en?.slice(0, 10) || '' });
+  for (const [addressId, list] of byAddress) {
+    if (list.length < 3) continue;
+    const customer = mockCustomers.find((c) => c.id === list[0].customerId);
+    const address = findAddress(list[0].customerId, addressId);
+    const lastClaimDate = [...list].map((c) => c.date).sort().at(-1)!;
+    result.push({
+      addressId,
+      customerName: customer ? `${customer.firstName} ${customer.lastName}` : 'Desconocido',
+      addressLabel: address ? `${address.street} ${address.number ?? ''}, ${address.neighborhood ?? address.city}` : addressId,
+      claimsCount: list.length,
+      lastClaimDate,
+    });
   }
-  return result.sort((a, b) => b.claimsCount - a.claimsCount);
+
+  return simulateDelay(result.sort((a, b) => b.claimsCount - a.claimsCount));
 }
+
 export async function getSatisfactionReport(filters: ReportsFilters): Promise<SatisfactionReport> {
   const ratings = mockSatisfactionRatings.filter((r) => inRange(r.date, filters));
+
   const distribution: SatisfactionReport['distribution'] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   for (const r of ratings) distribution[r.rating] += 1;
 

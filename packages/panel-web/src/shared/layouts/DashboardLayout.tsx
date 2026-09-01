@@ -1,27 +1,18 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { useTheme } from '@/shared/contexts/ThemeContext';
+import { usePushNotifications } from '@/shared/hooks/usePushNotifications';
 import { useBreadcrumbStore } from '@/shared/stores/breadcrumbStore';
 import { cn } from '@/shared/utils/cn';
 import { Logo } from '@/shared/components/Logo';
 import NotificationsDropdown from '@/shared/components/NotificationsDropdown';
 import NotificationPermissionBanner from '@/shared/components/NotificationPermissionBanner';
-import type { LucideIcon } from 'lucide-react';
+import { navigation, rutaVisiblePorSecciones } from '@/shared/config/navigation';
+import { usuariosApi } from '@/shared/services/api';
 import {
-  LayoutDashboard,
-  ClipboardList,
-  FileText,
-  ListChecks,
-  Users,
-  UserCircle,
-  Briefcase,
-  Package,
-  BarChart3,
-  Settings,
-  ShieldCheck,
-  CheckSquare,
   LogOut,
   Search,
   Menu,
@@ -33,34 +24,8 @@ import {
   WifiOff,
   Sun,
   Moon,
+  Settings,
 } from 'lucide-react';
-
-interface ItemNavegacion {
-  name: string;
-  href: string;
-  icon: LucideIcon;
-  /** El pañolero solo trabaja con materiales: el resto no le aparece. */
-  ocultarPara?: string[];
-}
-
-const navigation: ItemNavegacion[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Órdenes de Trabajo', href: '/orders', icon: ClipboardList, ocultarPara: ['panolero'] },
-  { name: 'Tickets', href: '/tickets', icon: FileText, ocultarPara: ['panolero'] },
-  // Módulo nuevo, en pruebas. Cuando reemplace al anterior, este pasa a ser
-  // "Tickets" y el de arriba se borra.
-  { name: 'Soporte', href: '/soporte', icon: ShieldCheck, ocultarPara: ['panolero', 'tecnico'] },
-  // Tareas internas: las ve todo el mundo, incluido el pañol y quien limpia.
-  { name: 'Tareas', href: '/tareas', icon: ListChecks },
-  { name: 'Cuadrillas', href: '/crews', icon: Users, ocultarPara: ['panolero'] },
-  { name: 'Empleados', href: '/empleados', icon: Briefcase, ocultarPara: ['panolero'] },
-  { name: 'Materiales', href: '/materiales', icon: Package },
-  // Plantillas de checklist: define lo que el técnico releva en el sitio.
-  { name: 'Checklists', href: '/checklists', icon: CheckSquare, ocultarPara: ['panolero', 'tecnico', 'operador'] },
-  { name: 'Clientes', href: '/customers', icon: UserCircle, ocultarPara: ['panolero'] },
-  { name: 'Reportes', href: '/reports', icon: BarChart3, ocultarPara: ['panolero'] },
-  { name: 'Configuración', href: '/settings', icon: Settings, ocultarPara: ['panolero'] },
-];
 
 // Etiqueta en español para el primer segmento de cada módulo en el breadcrumb.
 const etiquetasSegmento: Record<string, string> = {
@@ -69,7 +34,7 @@ const etiquetasSegmento: Record<string, string> = {
   crews: 'Cuadrillas',
   empleados: 'Empleados',
   materiales: 'Materiales',
-  soporte: 'Soporte',
+  soporte: 'Inbox',
   checklists: 'Checklists',
   customers: 'Clientes',
   reports: 'Reportes',
@@ -85,7 +50,16 @@ export default function DashboardLayout() {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const { permission, requestPermission, yaConsintio } = usePushNotifications();
   const breadcrumbLabels = useBreadcrumbStore((state) => state.labels);
+  // Comparte cache con la consulta de SettingsPage: no dispara un fetch aparte.
+  const { data: perfil } = useQuery({
+    queryKey: ['perfil'],
+    queryFn: () => usuariosApi.miPerfil(),
+    staleTime: 0,
+    enabled: !!user,
+  });
+  const secciones = perfil?.empleado?.secciones;
 
   const handleLogout = async () => {
     await logout();
@@ -140,6 +114,7 @@ export default function DashboardLayout() {
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-custom overflow-x-hidden">
           {navigation
             .filter((item) => !item.ocultarPara?.includes(user?.rol ?? ''))
+            .filter((item) => rutaVisiblePorSecciones(secciones, item.href, user?.rol))
             .map((item) => {
             const isActive = location.pathname.startsWith(item.href);
             return (
@@ -187,8 +162,9 @@ export default function DashboardLayout() {
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
-                  {user?.rol === 'admin' ? 'Admin' : user?.rol === 'planificador' ? 'Planificador' : user?.rol === 'despachador' ? 'Despachador' : user?.rol === 'tecnico' ? 'Técnico' : user?.rol === 'operador' ? 'Operador' : user?.rol === 'panolero' ? 'Pañolero' : 'Usuario'}
+                  {user?.rol === 'admin' ? 'Admin' : perfil?.empleado?.nombre ?? user?.email ?? 'Usuario'}
                 </p>
+                <p className="text-xs text-slate-400 truncate">{user?.rol}</p>
               </div>
             )}
           </div>

@@ -17,6 +17,12 @@ export interface CamposComunesValues {
   falla: Falla | '';
   sla_id: string;
   fecha_programada: string;
+  hora_programada: string;
+  zona?: string;
+  posicion?: number;
+  caja?: string;
+  precinto?: string;
+  sn?: string;
 }
 
 interface Props {
@@ -65,7 +71,7 @@ export function OrdenCamposComunes({ values, onChange, errors, mostrarFalla, pri
       {mostrarFalla && (
         <Select
           label="Falla"
-          placeholder="Seleccionar falla"
+         placeholder="Seleccionar falla"
           value={values.falla}
           options={FALLAS.map((f) => ({ value: f, label: fallaLabels[f] }))}
           onChange={(e) => onChange('falla', e.target.value as Falla)}
@@ -87,6 +93,49 @@ export function OrdenCamposComunes({ values, onChange, errors, mostrarFalla, pri
           value={values.fecha_programada}
           onChange={(e) => onChange('fecha_programada', e.target.value)}
         />
+        <Input
+          label="Hora programada"
+          type="time"
+          value={values.hora_programada}
+          onChange={(e) => onChange('hora_programada', e.target.value)}
+        />
+      </div>
+
+      <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+        <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">📋 Datos técnicos</h4>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Opcional. Lo que se sepa de la instalación.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <Input
+            label="Zona"
+            value={values.zona}
+            error={errors?.zona}
+            onChange={(e) => onChange('zona', e.target.value)}
+          />
+          <Input
+            label="Posición"
+            value={values.posicion}
+            error={errors?.posicion}
+	    onChange={(e) => onChange('posicion', parseInt(e.target.value) || 0)}
+          />
+          <Input
+            label="Caja"
+            value={values.caja}
+            error={errors?.caja}
+            onChange={(e) => onChange('caja', e.target.value)}
+          />
+          <Input
+            label="Precinto"
+            value={values.precinto}
+            error={errors?.precinto}
+            onChange={(e) => onChange('precinto', e.target.value)}
+          />
+          <Input
+            label="SN"
+            value={values.sn}
+            error={errors?.sn}
+            onChange={(e) => onChange('sn', e.target.value)}
+          />
+        </div>
       </div>
     </>
   );

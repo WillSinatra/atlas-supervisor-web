@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Pencil, Search, X } from 'lucide-react';
+import { FileText, Search, X } from 'lucide-react';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from '@/shared/components/ui/Badge';
@@ -12,6 +11,7 @@ import { tipoOrdenLabels } from '@/shared/constants/ordenLabels';
 import { etiquetasPrioridad } from '@/types/atlas';
 import type { TicketBeta } from '@/types/atlas';
 import { CreateTicketModal } from '@/modules/orders/components/CreateTicketModal';
+import { TicketDetailModal } from '@/modules/tickets/TicketDetailModal';
 
 const estadoBadge: Record<string, 'neutral' | 'info' | 'warning'> = {
   nuevo: 'neutral',
@@ -33,6 +33,7 @@ interface Filtros {
   prioridad: string;
   desde: string;
   hasta: string;
+  zona: string;
 }
 
 const sinFiltros: Filtros = {
@@ -43,15 +44,16 @@ const sinFiltros: Filtros = {
   prioridad: '',
   desde: '',
   hasta: '',
+  zona: '',
 };
 
 export default function TicketsPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [filtros, setFiltros] = useState<Filtros>(sinFiltros);
   const [aplicados, setAplicados] = useState<Filtros>(sinFiltros);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [enEdicion, setEnEdicion] = useState<TicketBeta | null>(null);
+  const [viendo, setViendo] = useState<TicketBeta | null>(null);
 
   // El texto se espera a que dejen de tipear; el resto se aplica al toque.
   useEffect(() => {
@@ -116,6 +118,17 @@ export default function TicketsPage() {
         }}
       />
 
+      <TicketDetailModal
+        ticket={viendo}
+        nombreCuadrilla={nombreCuadrilla}
+        onClose={() => setViendo(null)}
+        onEditar={(ticket) => {
+          setViendo(null);
+          setEnEdicion(ticket);
+          setModalAbierto(true);
+        }}
+      />
+
       {/* Todo en una fila en pantallas anchas: son filtros, no un formulario.
           Las fechas van sin etiqueta arriba para que todos los controles tengan
           la misma altura; la aclaración va abajo, en una sola línea. */}
@@ -152,6 +165,17 @@ export default function TicketsPage() {
             options={Object.entries(etiquetasPrioridad).map(([value, label]) => ({ value, label }))}
             value={filtros.prioridad}
             onChange={(e) => setFiltro('prioridad', e.target.value)}
+          />
+          <Select
+            placeholder="Zona"
+            options={[
+              { value: "Norte", label: "Norte" },
+              { value: "Sur", label: "Sur" },
+              { value: "Este", label: "Este" },
+              { value: "Oeste", label: "Oeste" }
+            ]}
+            value={filtros.zona}
+            onChange={(e) => setFiltro('zona', e.target.value)}
           />
           <Input
             type="date"
@@ -222,16 +246,17 @@ export default function TicketsPage() {
                   <th className="px-4 py-3">Dirección</th>
                   <th className="px-4 py-3">Tipo</th>
                   <th className="px-4 py-3">Cuadrilla</th>
+                  <th className="px-4 py-3">Zona</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Fecha</th>
-                  <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {tickets.map((ticket) => (
                   <tr
                     key={ticket.id}
-                    className="border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
+                    onClick={() => setViendo(ticket)}
+                    className="cursor-pointer border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
                   >
                     <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">
                       {ticket.cliente || '—'}
@@ -245,6 +270,9 @@ export default function TicketsPage() {
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
                       {nombreCuadrilla(ticket.cuadrilla_id)}
                     </td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                      {ticket.zona || '—'}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant={estadoBadge[ticket.estado] ?? 'neutral'}>
                         {estadoLabel[ticket.estado] ?? ticket.estado}
@@ -252,47 +280,6 @@ export default function TicketsPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
                       {new Date(ticket.creado_en).toLocaleDateString('es-AR')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setEnEdicion(ticket);
-                            setModalAbierto(true);
-                          }}
-                          title="Editar ticket"
-                          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-                        >
-                          <Pencil className="w-4 h-4 text-slate-500" />
-                        </button>
-                        <button
-                          onClick={() =>
-                            navigate('/orders/nueva', {
-                              state: {
-                                desdeTicket: {
-                                  tipo: ticket.tipo,
-                                  descripcion: ticket.descripcion ?? '',
-                                  clienteNombre: ticket.cliente,
-                                  cuadrillaId: ticket.cuadrilla_id ?? undefined,
-                                  // Si el ticket quedó ligado al padrón, la orden
-                                  // arranca con ese cliente y domicilio ya puestos.
-                                  clienteId: ticket.cliente_id ?? undefined,
-                                  domicilioId: ticket.domicilio_id ?? undefined,
-                                  // Y si no lo está, con esto Nueva Orden lo busca
-                                  // sola y ofrece darlo de alta con estos datos.
-                                  clienteTelefono: ticket.cliente_telefono ?? undefined,
-                                  direccion: ticket.direccion ?? undefined,
-                                  falla: ticket.motivo ?? undefined,
-                                  ticketBetaId: ticket.id,
-                                },
-                              },
-                            })
-                          }
-                          className="text-xs font-medium text-atlas-600 dark:text-atlas-400 hover:underline whitespace-nowrap"
-                        >
-                          Convertir en OT
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 ))}

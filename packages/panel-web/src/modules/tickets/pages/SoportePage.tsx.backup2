@@ -17,7 +17,6 @@ import {
   Search,
   ShieldCheck,
   WifiOff,
-  Hand,
 } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
@@ -34,8 +33,6 @@ import { VerificacionTicketCard } from '@/modules/tickets/components/Verificacio
 import { CreateTicketModal } from '@/modules/orders/components/CreateTicketModal';
 import { AdjuntosTicketCard } from '@/modules/tickets/components/AdjuntosTicketCard';
 import { useAreas } from '@/modules/tickets/hooks';
-import { useTomarTicket } from '../hooks/useTomarTicket';
-import { useSoltarTicket } from '../hooks/useSoltarTicket';
 /**
 
  *
@@ -59,9 +56,6 @@ export default function SoportePage() {
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   /** null = cerrado · 'nuevo' = alta · un ticket = edición. */
   const [editando, setEditando] = useState<TicketBeta | 'nuevo' | null>(null);
-  const [enProceso, setEnProceso] = useState<string[]>([]);
-  const { mutate: tomarTicket, isPending: isTomando } = useTomarTicket();
-  const { mutate: soltarTicket, isPending: isSoltando } = useSoltarTicket();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['tickets-beta', { tipo, estadoFiltro, areaId }],
@@ -121,7 +115,7 @@ export default function SoportePage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Inbox</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Soporte</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Los reclamos que entran por el portal, el bot o carga manual. N2 verifica lo que se puede resolver
             sin ir al domicilio, y recién después se convierten en orden de trabajo.
@@ -172,16 +166,6 @@ export default function SoportePage() {
                     }`}
                 >
                   Nuevo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEstadoFiltro(['en_proceso'])}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${estadoFiltro.length === 1 && estadoFiltro.includes('en_proceso')
-                    ? 'bg-yellow-600 text-white'
-                    : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-                    }`}
-                >
-                  En Proceso
                 </button>
                 <button
                   type="button"
@@ -252,8 +236,6 @@ export default function SoportePage() {
             ticket={ticket}
             onEditar={() => setEditando(ticket)}
             onConvertir={() => convertir(ticket, navigate)}
-            onTomar={tomarTicket}
-            isTomando={Boolean(isTomando)}
           />
         ) : (
           <div className="card">
@@ -293,15 +275,9 @@ function FilaTicket({
     <button
       type="button"
       onClick={onClick}
-      style={{
-        backgroundImage: ticket.tomado_por_id 
-          ? `linear-gradient(135deg, ${ticket.color_asignado}dd, ${ticket.color_asignado}99)`
-          : 'linear-gradient(135deg, rgba(51, 65, 85, 0.5), rgba(30, 41, 59, 0.5))',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-      }}
-      className={`w-full text-left card p-3 transition-all ${activo
-        ? 'ring-2 ring-blue-400 shadow-lg'
-        : 'hover:shadow-md'
+      className={`w-full text-left card p-3 transition-colors ${activo
+        ? 'ring-2 ring-atlas-500 bg-atlas-50/50 dark:bg-atlas-900/20'
+        : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'
         }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -311,19 +287,19 @@ function FilaTicket({
         <Badge variant={prioridadBadgeVariant[ticket.prioridad]}>{prioridadLabels[ticket.prioridad]}</Badge>
       </div>
 
-      <p className="text-xs text-slate-200 dark:text-slate-100 mt-1 truncate font-medium">
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
         {tipoOrdenLabels[ticket.tipo as keyof typeof tipoOrdenLabels] ?? ticket.tipo}
         {ticket.motivo ? ` · ${etiquetasMotivoTicket[ticket.motivo as keyof typeof etiquetasMotivoTicket] ?? ticket.motivo}` : ''}
       </p>
 
       {ticket.direccion && (
-        <p className={`text-xs mt-0.5 flex items-center gap-1 ${ticket.tomado_por_id ? 'text-white' : 'text-slate-100 dark:text-slate-200 opacity-90'}`}>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate flex items-center gap-1">
           <MapPin className="w-3 h-3 shrink-0" /> {ticket.direccion}
         </p>
       )}
 
       {ticket.creado_en && (
-        <p className={`text-xs mt-0.5 flex items-center gap-1 ${ticket.tomado_por_id ? 'text-white' : 'text-slate-400 dark:text-slate-500'}`}>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
           <Clock className="w-3 h-3 shrink-0" />
           {new Date(ticket.creado_en).toLocaleDateString('es-AR')} {new Date(ticket.creado_en).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -357,17 +333,12 @@ function Detalle({
   ticket,
   onEditar,
   onConvertir,
-  onTomar,
-  isTomando,
 }: {
   ticket: TicketBeta;
   onEditar: () => void;
   onConvertir: () => void;
-  onTomar: (id: string) => void;
-  isTomando?: boolean;
 }) {
   const queryClient = useQueryClient();
-  const loadingTomar = Boolean(isTomando);
   // El listado ya trae el estado; la card lo refresca al responder un ítem.
   const [completo, setCompleto] = useState(ticket.verificacion_completa ?? true);
   const [resolviendo, setResolviendo] = useState(false);
@@ -418,20 +389,6 @@ function Detalle({
               <>
                 <Button variant="secondary" icon={<Pencil className="w-4 h-4" />} onClick={onEditar}>
                   Editar
-                </Button>
-                <Button
-                  variant="secondary"
-                  icon={<Hand className="w-4 h-4" />}
-                  onClick={() => {
-                    if (confirm('¿Confirmar que tomas este ticket?')) {
-                     onTomar(ticket.id);
-                    }
-                  }}
-                  disabled={ticket.estado !== 'nuevo' || !!ticket.tomado_por_id}
-                  title={ticket.tomado_por_id ? 'Ya está tomado' : 'Tomar este ticket'}
-                  loading={loadingTomar}
-                >
-                  Tomar
                 </Button>
                 {/* El desenlace más común de un buen N2: se arregló por teléfono
                     y no hace falta mandar a nadie. */}

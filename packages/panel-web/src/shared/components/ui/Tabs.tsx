@@ -11,14 +11,14 @@ interface TabsProps {
 export function Tabs({ tabs, activeTab, onTabChange, children }: TabsProps) {
   return (
     <div>
-      <div className="border-b border-slate-200 dark:border-slate-700">
+      <div className="border-b border-slate-200 dark:border-slate-700 flex justify-center">
         <nav className="flex gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={cn(
-                'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
                 activeTab === tab.id
                   ? 'border-atlas-600 text-atlas-600 dark:text-atlas-400'
                   : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',

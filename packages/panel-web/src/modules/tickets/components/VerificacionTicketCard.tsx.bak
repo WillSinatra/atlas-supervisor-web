@@ -95,7 +95,7 @@ export function VerificacionTicketCard({ ticketId, onEstado }: VerificacionTicke
         <p className="text-sm text-slate-500 dark:text-slate-400">Cargando…</p>
       ) : (
         <div className="space-y-2">
-         {items.map((item) => (
+         {obligatorios.map((item) => (
             <Fila
               key={item.id}
               item={item}

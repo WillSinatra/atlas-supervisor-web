@@ -46,6 +46,8 @@ export function usePushNotifications() {
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
+        console.log('VAPID Key (primeros 20):', vapidKey?.substring(0, 20));
+        console.log('Subscribing to push...');
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,

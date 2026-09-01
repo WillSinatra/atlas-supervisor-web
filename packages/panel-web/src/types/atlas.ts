@@ -67,6 +67,7 @@ export interface Orden {
   area_id: string | null;
   empleado_id: string | null;
   fecha_programada: FechaIso | null;
+  hora_programada: string | null;
   firma_cliente: string | null;
   foto_despues: string | null;
   motivo_cancelacion: string | null;
@@ -79,6 +80,11 @@ export interface Orden {
   completada_en: FechaIso | null;
   cancelada_en: FechaIso | null;
   tiene_oferta_activa?: boolean;
+  zona: string | null;
+  posicion: string | null;
+  caja: string | null;
+  precinto: string | null;
+  sn: string | null;
   linea_tiempo: EventoOrden[];
 }
 
@@ -92,12 +98,18 @@ export interface CrearOrdenInput {
   falla?: string;
   sla_id?: string;
   fecha_programada?: FechaIso;
+  hora_programada?: string;
   /**
    * Si viene, la orden nace **asignada** a esa cuadrilla en vez de pendiente, y
    * el responsable se deriva de ella. Es lo que hace que al convertir un ticket
    * que ya tenía cuadrilla no haya que volver a asignarla a mano.
    */
   cuadrilla_id?: string;
+  zona?: string;
+  posicion?: number;
+  caja?: string;
+  precinto?: string;
+  sn?: string;
   /** Se derivan de la cuadrilla al asignarla; no se mandan a mano. */
   area_id?: string;
   empleado_id?: string;
@@ -302,6 +314,12 @@ export interface PerfilEmpleado {
   puesto: string | null;
   legajo: string | null;
   area: string | null;
+  /**
+   * Secciones del panel habilitadas para este empleado, más allá de lo que ya
+   * habilita el rol. Vacío [] = todavía no se configuró; undefined = la API
+   * no manda el campo (falta la migración).
+   */
+  secciones?: string[];
 }
 
 /**
@@ -386,6 +404,13 @@ export interface Empleado {
    * que no tendría dónde guardarse.
    */
   acceso?: AccesoEmpleado | null;
+  /**
+   * Secciones del panel habilitadas para este empleado, más allá de lo que ya
+   * habilita el rol. Vive en el empleado, no en la cuenta: no se pierde si se
+   * revoca o todavía no existe el acceso. Vacío [] = no configurado; undefined
+   * = la API no manda el campo (falta la migración).
+   */
+  secciones?: string[];
   creado_en: FechaIso;
   actualizado_en: FechaIso;
 }
@@ -406,6 +431,8 @@ export interface CrearEmpleadoInput {
   estado?: EstadoEmpleado;
   fecha_ingreso?: string | null;
   notas?: string | null;
+  /** Ver Empleado.secciones. Si no se manda, la lista queda como estaba. */
+  secciones?: string[];
 }
 
 export type EditarEmpleadoInput = Partial<CrearEmpleadoInput>;
@@ -454,6 +481,8 @@ export interface GuardarAccesoInput {
   /** Una de las dos: una contraseña elegida, o que la genere el sistema. */
   password?: string;
   generar?: boolean;
+  /** Ver Empleado.secciones. Se manda de nuevo acá para que quede junto con el resto del alta de cuenta. */
+  secciones?: string[];
 }
 
 export interface AccesoGuardado extends AccesoEmpleado {
@@ -873,6 +902,7 @@ export interface TicketBeta {
   posicion: string | null;
   tipo: string;
   cuadrilla_id: string | null;
+  
   /**
    * Vínculo con el padrón, cuando el ticket se cargó eligiendo un cliente del
    * sistema. null si es de alguien que no está en el padrón (o si el ticket es
@@ -884,7 +914,6 @@ export interface TicketBeta {
   area_id: string | null;
   empleado_id: string | null;
   prioridad: PrioridadOrden;
-  estado: string;
   fecha_visita: string | null;
   /** HH:MM:SS */
   hora_visita: string | null;
@@ -920,6 +949,16 @@ export interface TicketBeta {
   fotos_total?: number;
   creado_en: FechaIso;
   actualizado_en?: FechaIso;
+  estado: 'nuevo' | 'resuelto' | 'convertido_a_ot' | 'en_proceso';
+  tomado_por_id?: string | null;
+  tomado_por_nombre?: string | null;
+  tomado_en?: string | null;
+  color_asignado?: string;
+  nota_resolucion: string | null;
+  resuelto_por?: string | null;
+  resuelto_por_nombre?: string | null; 
+  resuelto_en: string | null; // ISO timestamp
+  resolucion?: string | null;
 }
 
 /**

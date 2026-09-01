@@ -235,6 +235,11 @@ function ItemFila({ item, borrador, onBorrador, onTilde, onRespuesta, onQuitar, 
                 Obligatorio
               </Badge>
             )}
+            {item.tipo === 'tilde' && item.respuesta && (
+              <Badge variant={item.respuesta === 'NO' ? 'danger' : 'neutral'} className="ml-2">
+                {item.respuesta}
+              </Badge>
+            )}
           </p>
 
           {item.tipo !== 'tilde' && (

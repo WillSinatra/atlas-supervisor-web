@@ -6,6 +6,7 @@ import { TasksClosedSection } from '../components/TasksClosedSection';
 import { RecurrencesSection } from '../components/RecurrencesSection';
 import { SatisfactionSection } from '../components/SatisfactionSection';
 
+import { TasksInternasSection } from '../components/TasksInternasSection';
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -41,6 +42,7 @@ export default function ReportsPage() {
       <SlaComplianceSection filters={range} />
       <ProductivitySection filters={range} />
       <TasksClosedSection filters={range} />
+      <TasksInternasSection filters={range} />
       <RecurrencesSection filters={range} />
       <SatisfactionSection filters={range} />
     </div>

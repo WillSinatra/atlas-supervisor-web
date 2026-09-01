@@ -28,7 +28,6 @@ import { plantillasApi, tareasApi } from '@/shared/services/tareas';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { TareaModal } from '@/modules/tareas/components/TareaModal';
 import { PlantillaModal } from '@/modules/tareas/components/PlantillaModal';
-import { TareasDashboard } from '@/modules/tareas/components/TareasDashboard';
 import {
   diasDeLaSemana,
   etiquetasEstadoTarea,
@@ -120,8 +119,8 @@ export default function TareasPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-start justify-between gap-6">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Tareas internas</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -129,7 +128,7 @@ export default function TareasPage() {
             llega la notificación.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           {pestana === 'recurrentes' ? (
             <Button
               icon={<Plus className="w-4 h-4" />}
@@ -167,8 +166,6 @@ export default function TareasPage() {
           setModalPlantilla(false);
         }}
       />
-
-      <TareasDashboard />
 
       <Tabs tabs={pestanas} activeTab={pestana} onTabChange={setPestana}>
         {(tabId) =>
@@ -218,7 +215,6 @@ function ListaTareas({
   // en tres pestañas deja claro qué se está viendo, en vez de una lista mixta.
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstadoTab>(leerFiltroEstadoGuardado);
   const [soloSinTomar, setSoloSinTomar] = useState(false);
-  const [busqueda, setBusqueda] = useState('');
 
   useEffect(() => {
     localStorage.setItem(FILTRO_ESTADO_KEY, filtroEstado);
@@ -255,10 +251,7 @@ function ListaTareas({
   });
 
   const tareas = data?.data ?? [];
-  const tareasFiltradas = tareas.filter((t: any) =>
-    t.titulo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (t.descripcion?.toLowerCase().includes(busqueda.toLowerCase()))
-  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -285,8 +278,8 @@ function ListaTareas({
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex flex-wrap items-center justify-center gap-4">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           {(Object.keys(etiquetasFiltroEstado) as FiltroEstadoTab[]).map((f) => (
             <button
@@ -317,20 +310,35 @@ function ListaTareas({
             Solo las que no tomó nadie
           </label>
         )}
-    </div>
+      </div>
+
       {tareas.length === 0 ? (
-        <div className="flex justify-center pt-1">
-          <div className="w-full max-w-xl flex flex-col items-center justify-center py-10 px-8 bg-slate-800/50 border border-slate-700/50 rounded-lg">
-            <CheckCircle2 className="w-6 h-6 text-slate-500 mb-3" />
-            <h3 className="text-white font-semibold text-lg mb-5">No tenés nada pendiente</h3>
-            <p className="text-slate-400 text-sm text-center leading-snug">
-              Cuando alguien te asigne algo, te va a aparecer acá y en la campanita.
-            </p>
-          </div>
+        <div className="card">
+          <EmptyState
+            icon={<CheckCircle2 className="w-8 h-8" />}
+            title={
+              filtroEstado !== 'pendientes'
+                ? `No hay ${etiquetasFiltroEstado[filtroEstado].toLowerCase()}`
+                : filtro === 'mias'
+                  ? 'No tenés nada pendiente'
+                  : filtro === 'creadas_por_mi'
+                    ? 'No pediste ninguna tarea'
+                    : soloSinTomar
+                      ? 'No hay nada sin tomar'
+                      : 'No entró ninguna tarea'
+            }
+            description={
+              filtro === 'mias'
+                ? 'Cuando alguien te asigne algo, te va a aparecer acá y en la campanita.'
+                : filtro === 'creadas_por_mi'
+                  ? 'Las tareas que le pidas a otros van a aparecer acá para seguirlas.'
+                  : 'Acá aparece todo lo que entra, incluido lo que crea el bot, sin importar a qué sector vaya dirigido.'
+            }
+          />
         </div>
       ) : (
         <div className="space-y-3">
-          {tareasFiltradas.map((tarea) => (
+          {tareas.map((tarea) => (
             <TarjetaTarea key={tarea.id} tarea={tarea} miEmpleadoId={miEmpleadoId} />
           ))}
         </div>
@@ -372,7 +380,7 @@ function TarjetaTarea({ tarea, miEmpleadoId }: { tarea: Tarea; miEmpleadoId: str
   const laPedi = miEmpleadoId !== null && tarea.creado_por?.id === miEmpleadoId;
 
   return (
-    <div className={`card p-5 space-y-4 transition-all duration-200 hover:shadow-lg hover:shadow-black/20 hover:scale-[1.01] cursor-pointer  ${vencida ? 'border-l-4 border-l-red-500' : ''}`}>
+    <div className={`card p-4 space-y-3 ${vencida ? 'border-l-4 border-l-red-500' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

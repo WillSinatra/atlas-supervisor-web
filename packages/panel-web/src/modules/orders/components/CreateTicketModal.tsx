@@ -377,45 +377,7 @@ export function CreateTicketModal({ open, ticket = null, onClose }: CreateTicket
             />
           </div>
         </Seccion>
-
-        <Seccion
-          icono={<Users className="w-4 h-4" />}
-          titulo="Quién lo hace"
-          ayuda="La cuadrilla es lo que asigna el trabajo. El responsable sale de ella."
-        >
-          <Select
-            label="Cuadrilla *"
-            placeholder="Seleccionar cuadrilla"
-            options={cuadrillaOptions}
-            value={form.cuadrilla_id}
-            onChange={(e) => setCampo('cuadrilla_id', e.target.value)}
-          />
-        </Seccion>
-
-        <Seccion
-          icono={<Settings2 className="w-4 h-4" />}
-          titulo="Datos técnicos"
-          ayuda="Opcional. Lo que ya se sepa de la instalación."
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <Input label="Zona" value={form.zona} onChange={(e) => setCampo('zona', e.target.value)} />
-            <Input label="Posición" value={form.posicion} onChange={(e) => setCampo('posicion', e.target.value)} />
-            <Input label="Caja" value={form.caja} onChange={(e) => setCampo('caja', e.target.value)} />
-            <Input label="Precinto" value={form.precinto} onChange={(e) => setCampo('precinto', e.target.value)} />
-            <Input label="SN" value={form.sn} onChange={(e) => setCampo('sn', e.target.value)} />
-          </div>
-          <Input
-            label="Link del mapa"
-            placeholder={
-              domicilioElegido?.lat != null ? 'Sale solo de las coordenadas del domicilio' : 'https://maps.google.com/...'
-            }
-            leftIcon={<MapPin className="w-4 h-4 text-slate-400" />}
-            value={form.url_mapa}
-            onChange={(e) => setCampo('url_mapa', e.target.value)}
-          />
-        </Seccion>
-      </div>
-
+	</div>
       <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
         <Button variant="secondary" onClick={onClose}>
           Cancelar

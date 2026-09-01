@@ -4,10 +4,22 @@ import { ImagePlus, Paperclip, Trash2 } from 'lucide-react';
 import { Alert } from '@/shared/components/ui/Alert';
 import { Button } from '@/shared/components/ui/Button';
 import { archivosApi, mensajeDeError } from '@/shared/services/api';
-import { ArchivoImagen, VisorImagen } from '@/shared/components/ArchivoImagen';
+import {
+  ArchivoDocumento,
+  ArchivoImagen,
+  VisorImagen,
+  esImagen,
+} from '@/shared/components/ArchivoImagen';
 
-/** Formatos que acepta la API. El SVG está por la firma, pero no molesta acá. */
-const ACEPTA = 'image/jpeg,image/png,image/webp,image/gif';
+/**
+ * Formatos que acepta la API para un ticket.
+ *
+ * El PDF está porque un comprobante de pago casi nunca es una foto: el home
+ * banking lo emite en PDF y el cliente lo reenvía tal cual por WhatsApp. Es el
+ * único adjunto del sistema que lo acepta — la firma y las fotos de cierre de
+ * una OT siguen siendo imágenes.
+ */
+const ACEPTA = 'image/jpeg,image/png,image/webp,image/gif,application/pdf';
 
 interface AdjuntosTicketCardProps {
   ticketId: string;
@@ -59,7 +71,7 @@ export function AdjuntosTicketCard({ ticketId }: AdjuntosTicketCardProps) {
     <div className="card p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-          <Paperclip className="w-5 h-5 text-atlas-600" /> Imágenes
+          <Paperclip className="w-5 h-5 text-atlas-600" /> Adjuntos
           {lista.length > 0 && (
             <span className="text-sm font-normal text-slate-500 dark:text-slate-400">{lista.length}</span>
           )}
@@ -100,8 +112,8 @@ export function AdjuntosTicketCard({ ticketId }: AdjuntosTicketCardProps) {
         <p className="text-sm text-slate-500 dark:text-slate-400">Cargando…</p>
       ) : lista.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Sin imágenes. Si el cliente mandó una foto del equipo o del problema, adjuntala acá: en muchos casos
-          alcanza para resolver sin visita.
+          Sin adjuntos. Si el cliente mandó una foto del equipo o del problema, adjuntala acá: en muchos casos
+          alcanza para resolver sin visita. También se acepta el PDF de un comprobante.
         </p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -110,12 +122,26 @@ export function AdjuntosTicketCard({ ticketId }: AdjuntosTicketCardProps) {
               key={foto.id}
               className="relative group rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700"
             >
-              <ArchivoImagen
-                archivoId={foto.id}
-                alt={foto.nombre_original ?? 'Imagen del ticket'}
-                className="w-full h-24 object-cover"
-                onClick={() => setViendo(foto.id)}
-              />
+              {/*
+                Un PDF no se puede renderizar en un <img>: quedaba un hueco roto
+                y el comprobante parecía no haberse subido. Se mira el `mime`,
+                que es lo que la API ya devuelve, y cada tipo va a su vista.
+              */}
+              {esImagen(foto.mime) ? (
+                <ArchivoImagen
+                  archivoId={foto.id}
+                  alt={foto.nombre_original ?? 'Imagen del ticket'}
+                  className="w-full h-24 object-cover"
+                  onClick={() => setViendo(foto.id)}
+                />
+              ) : (
+                <ArchivoDocumento
+                  archivoId={foto.id}
+                  nombre={foto.nombre_original}
+                  tamano={foto.tamano}
+                  className="w-full h-24"
+                />
+              )}
               <button
                 type="button"
                 title="Quitar la imagen"

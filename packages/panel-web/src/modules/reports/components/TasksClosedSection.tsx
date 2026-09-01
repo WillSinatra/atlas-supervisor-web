@@ -1,103 +1,137 @@
 import { useQuery } from '@tanstack/react-query';
-import { ListChecks } from 'lucide-react';
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { AlertCircle } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { getTasksClosedIndex, type ReportsFilters } from '@/shared/services/reportsService';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { Skeleton } from '@/shared/components/ui/Skeleton';
-import { ProgressBar } from '@/shared/components/ui/ProgressBar';
 
-/** Índice general de tareas internas cerradas (Pedido 10), fuente: GET /v1/tareas. */
+const COLORS = ['#10b981', '#fbbf24', '#ef4444']; // Verde, Amarillo, Rojo
+
 export function TasksClosedSection({ filters }: { filters: ReportsFilters }) {
   const { data, isLoading } = useQuery({
     queryKey: ['reports', 'tasks-closed', filters],
     queryFn: () => getTasksClosedIndex(filters),
   });
 
-  return (
-    <div className="card p-5 space-y-4">
-      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Tareas internas cerradas</h3>
+  if (isLoading) {
+    return (
+      <div className="card p-5 space-y-3">
+        <Skeleton className="h-6 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
-      {isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-6 w-full" />
-          <Skeleton className="h-6 w-full" />
-        </div>
-      ) : !data || data.total === 0 ? (
+  if (!data || data.total === 0) {
+    return (
+      <div className="card p-5">
+        <h3 className="text-lg font-semibold mb-4">Reclamos Internos Cerrados</h3>
         <EmptyState
-          icon={<ListChecks className="w-8 h-8" />}
-          title="Sin tareas en el período"
-          description="No se crearon tareas internas en el rango de fechas seleccionado."
+          icon={<AlertCircle className="w-8 h-8" />}
+          title="Sin datos"
+          description="No hay reclamos cerrados en el período seleccionado."
         />
-      ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center">
-            <div className="grid grid-cols-1 sm:grid-cols-3 lg:col-span-2 gap-4">
-              <div className="rounded-lg bg-slate-50 dark:bg-slate-700/50 p-4">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Abiertas</p>
-                <p className="text-2xl font-semibold text-slate-900 dark:text-white mt-1">{data.total - data.closed}</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 dark:bg-slate-700/50 p-4">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Cerradas / total</p>
-                <p className="text-2xl font-semibold text-slate-900 dark:text-white mt-1">
-                  {data.closed} / {data.total}
-                </p>
-              </div>
-              <div className="rounded-lg bg-slate-50 dark:bg-slate-700/50 p-4">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Tasa de cierre</p>
-                <p className="text-2xl font-semibold text-slate-900 dark:text-white mt-1">{data.rate}%</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 dark:bg-slate-700/50 p-4">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Ítems promedio / tarea</p>
-                <p className="text-2xl font-semibold text-slate-900 dark:text-white mt-1">{data.avgItemsPerTask}</p>
-              </div>
-            </div>
-            <div style={{ height: 160 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Abiertas', value: data.total - data.closed },
-                      { name: 'Cerradas', value: data.closed },
-                    ]}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={40}
-                    outerRadius={70}
-                    paddingAngle={2}
-                  >
-                    <Cell fill="hsl(45 93% 47%)" />
-                    <Cell fill="hsl(142 71% 45%)" />
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+      </div>
+    );
+  }
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Por área</p>
-              {data.byArea.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">Sin tareas dirigidas a un área en el período.</p>
-              ) : (
-                data.byArea.map((g) => (
-                  <ProgressBar key={g.id} label={g.name} value={g.rate} sublabel={`${g.closed} de ${g.total} cerradas`} />
-                ))
-              )}
-            </div>
-            <div className="space-y-4">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Por empleado</p>
-              {data.byEmployee.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">Sin tareas con responsable asignado en el período.</p>
-              ) : (
-                data.byEmployee.map((g) => (
-                  <ProgressBar key={g.id} label={g.name} value={g.rate} sublabel={`${g.closed} de ${g.total} cerradas`} />
-                ))
-              )}
-            </div>
+  // Preparar datos para Pie Chart (por área)
+  console.log('TasksClosedSection data:', data);
+  console.log('TasksClosedSection data:', data);
+  const areaChartData = (data.byArea || []).map((item, idx) => ({
+    name: item.name,
+    value: item.closed,
+    color: COLORS[idx % COLORS.length],
+  }));
+
+  return (
+    <div className="card p-5 space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Reclamos Internos Cerrados</h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Total: {data.total} reclamos en el período
+        </p>
+      </div>
+
+      {/* Pie Chart por Área */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <h4 className="text-sm font-semibold mb-4 text-slate-900 dark:text-white">Por Área</h4>
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
+              <Pie
+                data={areaChartData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, value }) => `${name}: ${value}`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {areaChartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Tabla por Empleado */}
+        <div>
+          <h4 className="text-sm font-semibold mb-4 text-slate-900 dark:text-white">Por Empleado</h4>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {(data.byEmployee || []).slice(0, 10).map((emp, idx) => {
+              const porcentaje = ((emp.closed / data.total) * 100).toFixed(1);
+              return (
+                <div key={emp.id} className="flex items-center justify-between p-2 rounded bg-slate-50 dark:bg-slate-700/30">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                    />
+                    <span className="text-sm text-slate-700 dark:text-slate-300">{emp.name}</span>
+                  </div>
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {emp.closed} ({porcentaje}%)
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Tabla por Área con detalles */}
+      <div>
+        <h4 className="text-sm font-semibold mb-3 text-slate-900 dark:text-white">Detalle por Área</h4>
+        <table className="w-full text-sm">
+          <thead className="border-b border-slate-300 dark:border-slate-600">
+            <tr>
+              <th className="text-left px-3 py-2">Área</th>
+              <th className="text-right px-3 py-2">Reclamos</th>
+              <th className="text-right px-3 py-2">Porcentaje</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.byArea || []).map((area) => {
+              const porcentaje = ((area.closed / data.total) * 100).toFixed(1);
+              return (
+                <tr key={area.id} className="border-b border-slate-200 dark:border-slate-700">
+                  <td className="px-3 py-2 text-slate-900 dark:text-white">{area.name}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">
+                    {area.closed}
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-300">
+                    {porcentaje}%
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

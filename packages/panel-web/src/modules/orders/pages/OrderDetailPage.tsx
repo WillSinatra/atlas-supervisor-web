@@ -73,9 +73,15 @@ function valoresDesdeOrden(orden: Orden): EdicionValues {
     falla: (orden.falla as Falla) ?? '',
     sla_id: orden.sla_id ?? '',
     fecha_programada: isoAInputLocal(orden.fecha_programada),
+    hora_programada: (orden.hora_programada ? orden.hora_programada.substring(0, 5) : '') ?? '',
     tipo: (orden.tipo as TipoOrden) ?? '',
     cliente_id: orden.cliente_id,
     domicilio_id: orden.domicilio_id,
+    zona: orden.zona ?? '',
+    posicion: typeof orden.posicion === 'string' ? parseInt(orden.posicion) : (orden.posicion ?? 0),
+    caja: orden.caja ?? '',
+    precinto: orden.precinto ?? '',
+    sn: orden.sn ?? '',
   };
 }
 
@@ -333,6 +339,15 @@ export default function OrderDetailPage() {
                   </span>
                 }
               />
+              <Field
+                label="Fecha vencimiento SLA"
+                value={
+                  (order as Orden & { fecha_vencimiento?: string | null }).fecha_vencimiento
+                    ? new Date((order as Orden & { fecha_vencimiento?: string | null }).fecha_vencimiento!).toLocaleString('es-AR')
+                    : '—'
+                }
+              />
+              <Field label="Hora programada" value={order.hora_programada ?? '—'} />
             </div>
             {order.falla && (
               <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
@@ -550,6 +565,47 @@ export default function OrderDetailPage() {
                 : undefined
             }
           />
+
+          <div className="card p-5">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">📋 Datos técnicos</h3>
+            {!order.zona && !order.posicion && !order.caja && !order.precinto && !order.sn ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">Sin datos técnicos registrados.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {order.zona && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Zona</p>
+                    <p className="text-sm text-slate-900 dark:text-white">{order.zona}</p>
+                  </div>
+                )}
+                {order.posicion && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Posición</p>
+                    <p className="text-sm text-slate-900 dark:text-white">{order.posicion}</p>
+                  </div>
+                )}
+                {order.caja && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Caja</p>
+                    <p className="text-sm text-slate-900 dark:text-white">{order.caja}</p>
+                  </div>
+                )}
+                {order.precinto && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Precinto</p>
+                    <p className="text-sm text-slate-900 dark:text-white">{order.precinto}</p>
+                  </div>
+                )}
+                {order.sn && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">SN</p>
+                    <p className="text-sm text-slate-900 dark:text-white">{order.sn}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 

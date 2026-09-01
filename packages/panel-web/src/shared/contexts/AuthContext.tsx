@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { authApi, type UsuarioSesion } from '@/shared/services/api';
+import { authApi, usuariosApi, type UsuarioSesion } from '@/shared/services/api';
 
 interface AuthContextType {
   user: UsuarioSesion | null;
@@ -35,10 +35,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
         localStorage.setItem('user', JSON.stringify(userData));
-        // Arrancar en limpio: nada de lo que consultó la sesión anterior sirve
-        // —ni es de esta persona— aunque todavía figure como fresco.
-        queryClient.clear();
-        setUser(userData);
+        // Obtener datos frescos con secciones ANTES de renderizar
+        const perfilCompleto = await usuariosApi.miPerfil();
+        const userConSecciones = { ...userData, empleado: perfilCompleto.empleado };
+        localStorage.setItem('user', JSON.stringify(userConSecciones));
+        setUser(userConSecciones);
       } finally {
         setIsLoading(false);
       }

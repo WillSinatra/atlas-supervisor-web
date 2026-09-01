@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, KeyRound, Monitor, Smartphone } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal';
 import { Input } from '@/shared/components/ui/Input';
@@ -60,6 +60,12 @@ interface AccesoState {
   panel: boolean;
   app: boolean;
   rol: RolUsuario;
+  /**
+   * Secciones del panel a las que se le da acceso, más allá de lo que ya
+   * habilita el rol. Todavía no hay dónde guardar esto en el backend: por
+   * ahora es sólo UI, lista para el día que se sume el campo.
+   */
+  secciones: string[];
   email: string;
   activo: boolean;
   generar: boolean;
@@ -85,6 +91,7 @@ const accesoVacio: AccesoState = {
   panel: true,
   app: false,
   rol: 'operador',
+  secciones: [],
   email: '',
   activo: true,
   generar: true,
@@ -112,14 +119,18 @@ function desdeEmpleado(empleado: Empleado | null): FormState {
 
 function desdeAcceso(empleado: Empleado | null): AccesoState {
   const acceso = empleado?.acceso;
+  // Las secciones viven en el empleado, no en la cuenta: se precargan igual
+  // exista o no acceso, para no perderlas al guardar cualquier otro campo.
+  const secciones = empleado?.secciones ?? [];
   if (!acceso) {
-    return { ...accesoVacio, email: empleado?.email ?? '' };
+    return { ...accesoVacio, secciones, email: empleado?.email ?? '' };
   }
   return {
     habilitado: true,
     panel: acceso.panel,
     app: acceso.app,
     rol: acceso.rol,
+    secciones,
     email: acceso.email,
     activo: acceso.activo,
     // En la edición la contraseña no se toca salvo que se pida expresamente.
@@ -130,6 +141,20 @@ function desdeAcceso(empleado: Empleado | null): AccesoState {
 
 /** '' se manda como null para que el backend distinga "sin dato" de "vacío". */
 const oNulo = (valor: string) => (valor.trim() === '' ? null : valor.trim());
+
+/** Secciones del panel que se pueden habilitar individualmente por empleado. */
+const SECCIONES = [
+  { value: 'ordenes', label: 'Órdenes de Trabajo' },
+  { value: 'tickets', label: 'Tickets' },
+  { value: 'soporte', label: 'Soporte' },
+  { value: 'tareas', label: 'Tareas' },
+  { value: 'cuadrillas', label: 'Cuadrillas' },
+  { value: 'empleados', label: 'Empleados' },
+  { value: 'materiales', label: 'Materiales' },
+  { value: 'checklists', label: 'Checklists' },
+  { value: 'clientes', label: 'Clientes' },
+  { value: 'reportes', label: 'Reportes' },
+];
 
 /** Casilla de verificación con la misma pinta que el resto del panel. */
 function Casilla({
@@ -171,6 +196,7 @@ export function EmpleadoModal({
   onGuardado,
 }: EmpleadoModalProps) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(formVacio);
   const [acceso, setAcceso] = useState<AccesoState>(accesoVacio);
   const [errores, setErrores] = useState<Partial<Record<string, string>>>({});
@@ -198,11 +224,14 @@ export function EmpleadoModal({
         estado: form.estado,
         fecha_ingreso: oNulo(form.fecha_ingreso),
         notas: oNulo(form.notas),
+        secciones: acceso.secciones,
       };
 
       const guardado = empleado
         ? await empleadosApi.actualizar(empleado.id, payload)
         : await empleadosApi.crear(payload);
+
+      await queryClient.refetchQueries({ queryKey: ['empleados'] });
 
       if (!puedeGestionarAcceso) {
         return { passwordGenerada: undefined, email: '', sinCuadrilla: false };
@@ -219,6 +248,7 @@ export function EmpleadoModal({
         rol: acceso.rol,
         acceso_panel: acceso.panel,
         acceso_app: acceso.app,
+        secciones: acceso.secciones,
         activo: acceso.activo,
         ...(acceso.generar
           ? { generar: true }
@@ -228,6 +258,7 @@ export function EmpleadoModal({
       });
 
       return {
+	empleado: guardado,
         passwordGenerada: resultado.password_generada,
         email: resultado.email,
         // Un técnico sin cuadrilla entra a la app pero no ve ninguna orden.
@@ -236,6 +267,7 @@ export function EmpleadoModal({
     },
     onSuccess: (resultado) => {
       setAvisoSinCuadrilla(resultado.sinCuadrilla);
+      setAcceso(desdeAcceso(resultado.empleado ?? null));
       if (resultado.passwordGenerada) {
         // La contraseña generada se muestra una sola vez: el modal se queda
         // abierto hasta que la persona la copie.
@@ -248,6 +280,9 @@ export function EmpleadoModal({
 
   useEffect(() => {
     if (!open) return;
+    if (empleado?.id) {
+      queryClient.refetchQueries({ queryKey: ['empleados', empleado.id] });
+    }
     setForm(desdeEmpleado(empleado));
     setAcceso(desdeAcceso(empleado));
     setErrores({});
@@ -289,6 +324,12 @@ export function EmpleadoModal({
     setForm((prev) => ({
       ...prev,
       area_ids: marcada ? [...prev.area_ids, id] : prev.area_ids.filter((otra) => otra !== id),
+    }));
+
+  const alternarSeccion = (valor: string, marcada: boolean) =>
+    setAcceso((prev) => ({
+      ...prev,
+      secciones: marcada ? [...prev.secciones, valor] : prev.secciones.filter((otra) => otra !== valor),
     }));
 
   const validar = (): boolean => {
@@ -502,6 +543,61 @@ export function EmpleadoModal({
           </div>
         )}
 
+        {/* ---------------------------------------- qué va a poder ver y usar */}
+        {puedeGestionarAcceso && (
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                ¿Qué va a poder ver y usar?
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Elegí el rol y los sistemas ahora, aunque todavía no tenga cuenta. Queda listo para el
+                momento en que actives "Puede iniciar sesión" más abajo.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
+              <Casilla checked={acceso.panel} onChange={(v) => setAccesoCampo('panel', v)}>
+                <span className="flex items-center gap-1.5">
+                  <Monitor className="w-4 h-4 text-slate-400" /> Panel web
+                </span>
+              </Casilla>
+              <Casilla checked={acceso.app} onChange={(v) => setAccesoCampo('app', v)}>
+                <span className="flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-slate-400" /> App móvil del técnico
+                </span>
+              </Casilla>
+            </div>
+            {errores.sistemas && (
+              <p className="text-xs text-red-600 dark:text-red-400">{errores.sistemas}</p>
+            )}
+
+            <Select
+              label="Rol"
+              options={Object.entries(etiquetasRolAcceso).map(([value, label]) => ({ value, label }))}
+              value={acceso.rol}
+              onChange={(e) => setAccesoCampo('rol', e.target.value as RolUsuario)}
+            />
+
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Secciones habilitadas
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {SECCIONES.map((seccion) => (
+                  <Casilla
+                    key={seccion.value}
+                    checked={acceso.secciones.includes(seccion.value)}
+                    onChange={(marcada) => alternarSeccion(seccion.value, marcada)}
+                  >
+                    {seccion.label}
+                  </Casilla>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ------------------------------------------------ acceso al sistema */}
         {puedeGestionarAcceso && (
           <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
@@ -522,43 +618,14 @@ export function EmpleadoModal({
 
             {acceso.habilitado && (
               <div className="space-y-4 pl-6">
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    ¿A qué sistema entra?
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
-                    <Casilla checked={acceso.panel} onChange={(v) => setAccesoCampo('panel', v)}>
-                      <span className="flex items-center gap-1.5">
-                        <Monitor className="w-4 h-4 text-slate-400" /> Panel web
-                      </span>
-                    </Casilla>
-                    <Casilla checked={acceso.app} onChange={(v) => setAccesoCampo('app', v)}>
-                      <span className="flex items-center gap-1.5">
-                        <Smartphone className="w-4 h-4 text-slate-400" /> App móvil del técnico
-                      </span>
-                    </Casilla>
-                  </div>
-                  {errores.sistemas && (
-                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errores.sistemas}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Email de ingreso *"
-                    type="email"
-                    value={acceso.email}
-                    error={errores.emailAcceso}
-                    placeholder={form.email || 'nombre@empresa.com'}
-                    onChange={(e) => setAccesoCampo('email', e.target.value)}
-                  />
-                  <Select
-                    label="Rol"
-                    options={Object.entries(etiquetasRolAcceso).map(([value, label]) => ({ value, label }))}
-                    value={acceso.rol}
-                    onChange={(e) => setAccesoCampo('rol', e.target.value as RolUsuario)}
-                  />
-                </div>
+                <Input
+                  label="Email de ingreso *"
+                  type="email"
+                  value={acceso.email}
+                  error={errores.emailAcceso}
+                  placeholder={form.email || 'nombre@empresa.com'}
+                  onChange={(e) => setAccesoCampo('email', e.target.value)}
+                />
 
                 {acceso.rol === 'tecnico' && (
                   <p className="text-xs text-slate-500 dark:text-slate-400">

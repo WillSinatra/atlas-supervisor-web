@@ -11,6 +11,7 @@ import { FALLAS, tipoOrdenLabels } from '@/shared/constants/ordenLabels';
 import type { Falla, TipoOrden } from '@/shared/constants/ordenLabels';
 import { OrdenCamposComunes, type CamposComunesValues } from '@/modules/orders/components/OrdenCamposComunes';
 import type { CrearOrdenInput, PrioridadOrden, Cliente } from '@/types/atlas';
+import axios from 'axios';
 
 interface FormState extends CamposComunesValues {
   tipo: TipoOrden | '';
@@ -35,6 +36,12 @@ const initialForm: FormState = {
   falla: '',
   sla_id: '',
   fecha_programada: '',
+  hora_programada: '',
+  zona: '',
+  posicion: 0,
+  caja: '',
+  precinto: '',
+  sn: '',
 };
 
 export default function NuevaOrdenPage() {
@@ -64,6 +71,11 @@ export default function NuevaOrdenPage() {
          * bandeja es comodidad; el control de verdad está del otro lado.
          */
         ticketBetaId?: string;
+	zona?: string;
+	posicion?: string;
+	caja?: string;
+	precinto?: string;
+	sn?: string;
       };
     } | null
   )?.desdeTicket;
@@ -82,6 +94,11 @@ export default function NuevaOrdenPage() {
     // Se valida en vez de confiar: el motivo del ticket es texto libre y puede
     // venir de una integración con un valor que el panel no conoce.
     falla: esFalla(desdeTicket?.falla) ? desdeTicket.falla : '',
+    zona: desdeTicket?.zona ?? '',
+    caja: desdeTicket?.caja ?? '',
+    precinto: desdeTicket?.precinto ?? '',
+    posicion: desdeTicket?.posicion ? parseInt(desdeTicket.posicion) : 0,
+    sn: desdeTicket?.sn ?? '',
   }));
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [clienteQuery, setClienteQuery] = useState('');
@@ -122,6 +139,43 @@ export default function NuevaOrdenPage() {
     queryFn: () => clientesApi.detalle(desdeTicket!.clienteId!),
     enabled: !!desdeTicket?.clienteId,
   });
+
+  // ====== PRECARGA DESDE ALTA RÁPIDA ======
+  const searchParams = new URLSearchParams(location.search);
+  const altaId = searchParams.get('alta_id');
+  
+  const { data: altaData, isLoading: cargandoAlta } = useQuery({
+    queryKey: ['altas-rapidas', altaId],
+    queryFn: async () => {
+      const token = localStorage.getItem('accessToken');
+      const response = await axios.get(`/api/v1/altas-rapidas/${altaId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.data;
+    },
+    enabled: !!altaId,
+  });
+
+  useEffect(() => {
+    if (altaData?.data) {
+      const alta = altaData.data;
+      setForm(prev => ({
+        ...prev,
+        cliente_id: alta.cliente_id || '',
+        tipo: 'instalacion',
+        descripcion: `Instalación ${alta.plan.nombre} - $${alta.plan.precio}`,
+        falla: '',
+        titulo: `Instalación ${alta.plan.nombre}`,
+      }));
+      // Si el cliente existe, buscarlo y seleccionarlo
+      if (alta.cliente_id) {
+        clientesApi.detalle(alta.cliente_id).then(res => {
+          setClienteSeleccionado(res);
+          setClienteQuery(res.nombre);
+        });
+      }
+    }
+  }, [altaData]);
 
   useEffect(() => {
     if (clienteDelTicket && !clienteSeleccionado) {
@@ -247,8 +301,14 @@ export default function NuevaOrdenPage() {
       falla: form.tipo === 'reparacion' && form.falla ? form.falla : undefined,
       sla_id: form.sla_id || undefined,
       fecha_programada: form.fecha_programada ? new Date(form.fecha_programada).toISOString() : undefined,
+      hora_programada: form.hora_programada || undefined,
       cuadrilla_id: form.cuadrilla_id || undefined,
       ticket_beta_id: desdeTicket?.ticketBetaId,
+      zona: form.zona || undefined,
+      posicion: (form.posicion ?? 0) > 0 ? form.posicion : undefined,
+      caja: form.caja || undefined,
+      precinto: form.precinto || undefined,
+      sn: form.sn || undefined,
     };
     createMutation.mutate(payload);
   };

@@ -19,6 +19,9 @@ const SettingsPlaceholder = lazy(() => import('@/modules/settings/pages/Settings
 const TicketsPage = lazy(() => import('@/modules/tickets/pages/TicketsPage'));
 // Módulo nuevo de tickets. Convive con el anterior hasta reemplazarlo.
 const SoportePage = lazy(() => import('@/modules/tickets/pages/SoportePage'));
+const AltasRapidasPage = lazy(() => import('@/modules/altas-rapidas'));
+const ValidarAltasPage = lazy(() => import('@/modules/validar-altas'));
+const CrearOTPage = lazy(() => import('@/modules/crear-ot'));
 const TareasPage = lazy(() => import('@/modules/tareas/pages/TareasPage'));
 const EmpleadosPage = lazy(() => import('@/modules/empleados/pages/EmpleadosPage'));
 const MaterialesPage = lazy(() => import('@/modules/materiales/pages/MaterialesPage'));
@@ -104,6 +107,18 @@ export const router = createBrowserRouter([
       {
         path: 'tareas',
         element: <TareasPage />,
+      },
+      {
+	path: 'altas-rapidas',
+	element: <AltasRapidasPage />,
+      },
+      {
+	path: 'validar-altas',
+	element: <ValidarAltasPage />,
+      },
+      {
+	path: 'crear-ot',
+	element: <CrearOTPage />, 
       },
       {
         path: 'crews',

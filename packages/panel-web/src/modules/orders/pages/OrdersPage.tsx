@@ -77,8 +77,14 @@ export default function OrdersPage() {
     setSearchParams(proximos, { replace: true });
   };
 
-  const orders = useMemo(() => {
-    let result = data?.data ?? [];
+  const orders = useMemo(() => { 
+  let result = data?.data ?? [];
+
+ // Excluir órdenes canceladas SOLO si no estoy filtrando por canceladas
+    if (filters.estado !== 'cancelada') {
+    result = result.filter((o) => o.estado !== 'cancelada');
+   }
+
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter(

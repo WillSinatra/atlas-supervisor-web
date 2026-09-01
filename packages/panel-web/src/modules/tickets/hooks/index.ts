@@ -1,0 +1,1 @@
+export { useAreas } from './useAreas';
