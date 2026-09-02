@@ -398,7 +398,7 @@ function TechnicianRow({ tecnico, onChanged }: { tecnico: Tecnico; onChanged: ()
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-full bg-atlas-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-            {tecnico.nombre.charAt(0)}
+            {(tecnico.nombre?.[0] ?? "").toUpperCase()}
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{tecnico.nombre}</p>
@@ -473,7 +473,7 @@ function AddTechnicianForm({
     queryFn: () =>
       empleadosApi.listar({
         estado: 'activo',
-        sin_cuadrilla: true,
+        
         area_id: areaFiltro || undefined,
         per_page: 200,
       }),

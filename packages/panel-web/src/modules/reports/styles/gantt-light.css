@@ -1,0 +1,163 @@
+/* Gantt Light Theme - Atlas */
+
+:root {
+  --gantt-bg: #ffffff;
+  --gantt-header-bg: #f9fafb;
+  --gantt-header-border: #e5e7eb;
+  --gantt-row-border: #e5e7eb;
+  --gantt-row-hover: #f3f4f6;
+  --gantt-text: #1f2937;
+  --gantt-text-light: #6b7280;
+  --gantt-grid-line: #d1d5db;
+}
+
+.gantt {
+  background-color: var(--gantt-bg);
+  color: var(--gantt-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  border: 1px solid var(--gantt-header-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.gantt .grid-header {
+  background-color: var(--gantt-header-bg);
+  border-bottom: 2px solid var(--gantt-header-border);
+  color: var(--gantt-text);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.gantt .grid-header .grid-cell {
+  border-right: 1px solid var(--gantt-row-border);
+  padding: 10px 8px;
+}
+
+.gantt .grid-row {
+  border-bottom: 1px solid var(--gantt-row-border);
+  background-color: var(--gantt-bg);
+  transition: background-color 0.15s ease;
+}
+
+.gantt .grid-row:nth-child(even) {
+  background-color: #fafbfc;
+}
+
+.gantt .grid-row:hover {
+  background-color: var(--gantt-row-hover);
+}
+
+.gantt .grid-row .grid-cell {
+  border-right: 1px solid var(--gantt-row-border);
+  padding: 8px;
+  font-size: 13px;
+  color: var(--gantt-text);
+}
+
+.gantt .bar-wrapper .bar {
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: none;
+  transition: all 0.2s ease;
+  height: 24px;
+  margin-top: 3px;
+}
+
+.gantt .bar-wrapper .bar:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.gantt .bar-wrapper .bar-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+
+.gantt .bar-wrapper .bar.progress-0 {
+  background: linear-gradient(90deg, #d1d5db 0%, #9ca3af 100%);
+}
+
+.gantt .bar-wrapper .bar.progress-25 {
+  background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+}
+
+.gantt .bar-wrapper .bar.progress-50 {
+  background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%);
+}
+
+.gantt .bar-wrapper .bar.progress-75 {
+  background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
+}
+
+.gantt .bar-wrapper .bar.progress-100 {
+  background: linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%);
+}
+
+.gantt .arrow {
+  stroke: #9ca3af;
+  stroke-width: 1.5;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.gantt .arrow:hover {
+  stroke: #6b7280;
+  opacity: 1;
+}
+
+.gantt .bar-wrapper .milestone {
+  background-color: transparent;
+  border: 2px solid #3b82f6;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: 5px;
+}
+
+.gantt .bar-wrapper .milestone polygon {
+  fill: #3b82f6;
+}
+
+.gantt::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.gantt::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gantt::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.gantt::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .gantt {
+    font-size: 12px;
+  }
+
+  .gantt .bar-wrapper .bar-label {
+    font-size: 10px;
+  }
+}
+
+@media print {
+  .gantt {
+    border: 1px solid #ccc;
+  }
+
+  .gantt .bar-wrapper .bar:hover {
+    filter: none;
+    box-shadow: none;
+  }
+}

@@ -20,7 +20,7 @@ export function MaintenanceCard({ registro, onOpen }: MaintenanceCardProps) {
 
           <div className="flex items-center gap-1.5 mt-1">
             <div className="w-4 h-4 rounded-full bg-atlas-600 flex items-center justify-center text-white text-[9px] font-medium flex-shrink-0">
-              {registro.tecnico_nombre.charAt(0)}
+              {(registro.tecnico_nombre?.[0] ?? "").toUpperCase()}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
               {new Date(registro.fecha).toLocaleDateString('es-AR', {

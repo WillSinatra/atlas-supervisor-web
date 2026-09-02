@@ -361,6 +361,19 @@ export default function OrderDetailPage() {
                 <p className="text-sm text-slate-700 dark:text-slate-300 mt-0.5">{order.descripcion}</p>
               </div>
             )}
+            {order.tipo_cierre === 'sin_disponibilidad' && (
+              <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-950 border-l-4 border-orange-500 rounded">
+                <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
+                  ⚠️ Orden cerrada sin completar
+                </p>
+                <p className="text-xs text-orange-800 dark:text-orange-300 mt-1">
+                  <strong>Motivo:</strong>
+                </p>
+                <p className="text-sm text-orange-900 dark:text-orange-100 bg-white dark:bg-slate-800 p-2 rounded border border-orange-200 dark:border-orange-800 mt-1">
+                  {order.motivo_no_disponibilidad}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="card p-5">

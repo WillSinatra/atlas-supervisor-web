@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, Fragment } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Table, Map as MapIcon, AlertTriangle, Search, Plus, X } from 'lucide-react';
@@ -254,12 +254,26 @@ export default function OrdersPage() {
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <OrderRow
-                    key={order.id}
-                    order={order}
-                    cuadrillaNombre={order.cuadrilla_id ? cuadrillaNombrePorId.get(order.cuadrilla_id) : undefined}
-                    onClick={() => navigate(`/orders/${order.id}`)}
-                  />
+                  <Fragment key={order.id}>
+                    <OrderRow
+                      order={order}
+                      cuadrillaNombre={order.cuadrilla_id ? cuadrillaNombrePorId.get(order.cuadrilla_id) : undefined}
+                      onClick={() => navigate(`/orders/${order.id}`)}
+                    />
+                    {order.tipo_cierre === 'sin_disponibilidad' && (
+                      <tr onClick={() => navigate(`/orders/${order.id}`)} className="cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors bg-orange-50 dark:bg-orange-950/20 border-b border-orange-200 dark:border-orange-900">
+                        <td colSpan={9} className="px-4 py-3">
+                          <div className="flex items-start gap-2">
+                            <span className="text-orange-600 dark:text-orange-400 font-bold mt-0.5">⚠️</span>
+                            <div>
+                              <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">Cerrada sin instalar</p>
+                              <p className="text-xs text-orange-800 dark:text-orange-300 mt-0.5">{order.motivo_no_disponibilidad}</p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

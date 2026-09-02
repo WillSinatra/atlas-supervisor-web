@@ -1,0 +1,13 @@
+export { GanttChart } from './GanttChart';
+export { GanttChartSection } from './GanttChartSection';
+export { CostsSection } from './CostsSection';
+export { ProductivitySection } from './ProductivitySection';
+export { RecurrencesSection } from './RecurrencesSection';
+export { SatisfactionSection } from './SatisfactionSection';
+export { SimpleBarChart } from './SimpleBarChart';
+export { SlaComplianceSection } from './SlaComplianceSection';
+export { SupportTicketsResolutionSection } from './SupportTicketsResolutionSection';
+export { TasksClosedSection } from './TasksClosedSection';
+export { TasksInternasClosedSection } from './TasksInternasClosedSection';
+export { TasksInternasSection } from './TasksInternasSection';
+export { EditarTareaModal } from './EditarTareaModal';

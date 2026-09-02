@@ -33,8 +33,8 @@ export interface ItemNavegacion {
 
 export const navigation: ItemNavegacion[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Órdenes de Trabajo', href: '/orders', icon: ClipboardList, ocultarPara: ['panolero'], value: 'ordenes' },
-  { name: 'Tickets', href: '/tickets', icon: FileText, ocultarPara: ['panolero'], value: 'tickets' },
+  { name: 'Órdenes de Trabajo', href: '/orders', icon: ClipboardList, value: 'ordenes' },
+  { name: 'Tickets', href: '/tickets', icon: FileText, value: 'tickets' },
   // Módulo nuevo, en pruebas. Cuando reemplace al anterior, este pasa a ser
   // "Tickets" y el de arriba se borra.
   { name: 'Inbox', href: '/soporte', icon: ShieldCheck, ocultarPara: ['panolero', 'tecnico'], value: 'soporte' },
@@ -43,14 +43,14 @@ export const navigation: ItemNavegacion[] = [
   { name: 'Alta Rápida', href: '/altas-rapidas', icon: Zap, value: 'altas_rapidas' },
   { name: 'Validar Altas', href: '/validar-altas', icon: CheckCircle2, value: 'validar_altas' },  
 //  { name: 'Crear OT', href: '/crear-ot', icon: Wrench, value: 'crear_ot' },
-  { name: 'Cuadrillas', href: '/crews', icon: Users, ocultarPara: ['panolero'], value: 'cuadrillas' },
+  { name: 'Cuadrillas', href: '/crews', icon: Users, value: 'cuadrillas' },
   { name: 'Empleados', href: '/empleados', icon: Briefcase, ocultarPara: ['panolero', 'planificador'], value: 'empleados' },
   { name: 'Materiales', href: '/materiales', icon: Package, ocultarPara: ['planificador'], value: 'materiales' },
   // Plantillas de checklist: define lo que el técnico releva en el sitio.
   { name: 'Checklists', href: '/checklists', icon: CheckSquare, ocultarPara: ['panolero', 'tecnico', 'operador'], value: 'checklists' },
-  { name: 'Clientes', href: '/customers', icon: UserCircle, ocultarPara: ['panolero'], value: 'clientes' },
+  { name: 'Clientes', href: '/customers', icon: UserCircle, value: 'clientes' },
   { name: 'Reportes', href: '/reports', icon: BarChart3, ocultarPara: ['panolero', 'planificador'], value: 'reportes' },
-  { name: 'Configuración', href: '/settings', icon: Settings, ocultarPara: ['panolero'] },
+  { name: 'Configuración', href: '/settings', icon: Settings },
 ];
 
 /** Un ítem sin ocultarPara (ej. Dashboard) nunca bloquea la ruta. */

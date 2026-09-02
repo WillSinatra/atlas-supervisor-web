@@ -54,7 +54,7 @@ export default function TicketsPage() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [enEdicion, setEnEdicion] = useState<TicketBeta | null>(null);
   const [viendo, setViendo] = useState<TicketBeta | null>(null);
-
+  const [page, setPage] = useState(1);
   // El texto se espera a que dejen de tipear; el resto se aplica al toque.
   useEffect(() => {
     const id = setTimeout(() => setAplicados(filtros), 300);
@@ -69,14 +69,15 @@ export default function TicketsPage() {
     id ? cuadrillasData?.data.find((c) => c.id === id)?.nombre ?? '—' : 'Sin asignar';
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['tickets', aplicados],
+    queryKey: ['tickets', aplicados, page],
     queryFn: () => {
       // Los filtros los resuelve la API: el listado puede crecer y filtrar en
       // el cliente solo esconde lo que ya se trajo.
       const params: Record<string, string> = {};
       for (const [clave, valor] of Object.entries(aplicados)) {
         if (valor.trim() !== '') params[clave] = valor.trim();
-      }
+      params.page = page.toString();      
+     }
       return ticketsBetaApi.listar(params);
     },
   });
@@ -165,17 +166,6 @@ export default function TicketsPage() {
             options={Object.entries(etiquetasPrioridad).map(([value, label]) => ({ value, label }))}
             value={filtros.prioridad}
             onChange={(e) => setFiltro('prioridad', e.target.value)}
-          />
-          <Select
-            placeholder="Zona"
-            options={[
-              { value: "Norte", label: "Norte" },
-              { value: "Sur", label: "Sur" },
-              { value: "Este", label: "Este" },
-              { value: "Oeste", label: "Oeste" }
-            ]}
-            value={filtros.zona}
-            onChange={(e) => setFiltro('zona', e.target.value)}
           />
           <Input
             type="date"
@@ -287,8 +277,29 @@ export default function TicketsPage() {
             </table>
           </div>
           {data?.pagination && (
-            <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
-              {tickets.length} de {data.pagination.total} ticket{data.pagination.total === 1 ? '' : 's'}
+            <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {tickets.length} de {data.pagination.total} ticket{data.pagination.total === 1 ? '' : 's'}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1 text-xs font-medium rounded border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <span className="text-xs text-slate-600 dark:text-slate-400">
+                  Página {page} de {data.pagination.total_pages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(data.pagination.total_pages, p + 1))}
+                  disabled={page === data.pagination.total_pages}
+                  className="px-3 py-1 text-xs font-medium rounded border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Siguiente
+                </button>
+              </div>
             </div>
           )}
         </div>

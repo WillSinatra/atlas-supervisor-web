@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DateRangeFilter, type DateRange } from '@/shared/components/ui/DateRangeFilter';
+import { GanttChartSection } from '../components/GanttChartSection';
 import { SlaComplianceSection } from '../components/SlaComplianceSection';
 import { ProductivitySection } from '../components/ProductivitySection';
 import { TasksClosedSection } from '../components/TasksClosedSection';
@@ -39,6 +40,8 @@ export default function ReportsPage() {
         de este repo), así que mostrarla sería mock disfrazado de dato real.
         Reactivar cuando exista ese endpoint — ver <CostsSection /> y reportsService.ts.
       */}
+      <GanttChartSection />
+
       <SlaComplianceSection filters={range} />
       <ProductivitySection filters={range} />
       <TasksClosedSection filters={range} />

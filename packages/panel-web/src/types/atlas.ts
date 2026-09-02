@@ -86,6 +86,8 @@ export interface Orden {
   precinto: string | null;
   sn: string | null;
   linea_tiempo: EventoOrden[];
+  tipo_cierre?: 'normal' | 'sin_disponibilidad';
+  motivo_no_disponibilidad?: string | null;
 }
 
 export interface CrearOrdenInput {

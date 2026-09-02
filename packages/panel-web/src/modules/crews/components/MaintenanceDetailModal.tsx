@@ -92,7 +92,7 @@ export function MaintenanceDetailModal({ registro, onClose }: MaintenanceDetailM
             </p>
             <div className="flex items-center gap-2 mt-1.5">
               <div className="w-6 h-6 rounded-full bg-atlas-600 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
-                {registro.tecnico_nombre.charAt(0)}
+                {(registro.tecnico_nombre?.[0] ?? "").toUpperCase()}
               </div>
               <p className="text-sm text-slate-600 dark:text-slate-400">
                 Técnico: <strong className="text-slate-900 dark:text-white">{registro.tecnico_nombre}</strong>
