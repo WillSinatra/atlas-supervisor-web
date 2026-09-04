@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, Camera, PenTool, Pencil, UserCog, WifiOff } from 'lucide-react';
+import { ArrowLeft, Clock, Camera, PenTool, Pencil, UserCog, WifiOff, X } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
 import { Select } from '@/shared/components/ui/Select';
@@ -215,7 +215,27 @@ export default function OrderDetailPage() {
   });
 
   const edicionBloqueada = order ? ESTADOS_BLOQUEADOS.includes(order.estado) : false;
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelMotivo, setCancelMotivo] = useState('');
 
+  const cancelMutation = useMutation({
+    mutationFn: async (motivo: string) => {
+      await ordenesApi.cancelar(order!.id, motivo);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orden', order?.id] });
+      setShowCancelModal(false);
+      setCancelMotivo('');
+    },
+  });
+
+  const handleCancelClick = () => {
+    if (!cancelMotivo.trim()) {
+      alert('Debes indicar un motivo');
+      return;
+    }
+    cancelMutation.mutate(cancelMotivo);
+  };
   const openEdit = () => {
     if (!order || edicionBloqueada) return;
     const valores = valoresDesdeOrden(order);
@@ -375,6 +395,19 @@ export default function OrderDetailPage() {
               </div>
             )}
           </div>
+            {order.estado === 'cancelada' && (
+              <div className="mt-4 p-4 bg-red-50 dark:bg-red-950 border-l-4 border-red-500 rounded">
+                <p className="text-sm font-semibold text-red-900 dark:text-red-200">
+                  🚫 Orden cancelada
+                </p>
+                <p className="text-xs text-red-800 dark:text-red-300 mt-1">
+                  <strong>Motivo:</strong>
+                </p>
+                <p className="text-sm text-red-900 dark:text-red-100 bg-white dark:bg-slate-800 p-2 rounded border border-red-200 dark:border-red-800 mt-1">
+                  {(order as any).motivo_cancelacion || '(Sin especificar)'}
+                </p>
+              </div>
+            )}
 
           <div className="card p-5">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Línea de tiempo</h3>
@@ -674,9 +707,18 @@ export default function OrderDetailPage() {
               />
             </section>
 
-            <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-700">
+            <div className="flex justify-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-700">
               <Button variant="secondary" onClick={() => setEditOpen(false)}>
                 Cancelar
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<X className="w-4 h-4" />}
+                disabled={edicionBloqueada || cancelMutation.isPending}
+                onClick={() => setShowCancelModal(true)}
+              >
+                Cancelar OT
               </Button>
               <Button
                 variant="primary"
@@ -690,6 +732,41 @@ export default function OrderDetailPage() {
           </div>
         )}
       </Modal>
+
+      {/* Modal Cancelar OT */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-900 rounded-lg p-6 max-w-sm w-full mx-4 border border-slate-700">
+            <h3 className="text-lg font-semibold text-red-400 mb-4">Cancelar OT</h3>
+            <p className="text-sm text-slate-300 mb-4">¿Estás seguro? Proporciona un motivo:</p>
+            <textarea
+              value={cancelMotivo}
+              onChange={(e) => setCancelMotivo(e.target.value)}
+              placeholder="Motivo de cancelación..."
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-slate-100 placeholder-slate-400 text-sm mb-4"
+              rows={3}
+            />
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelMotivo('');
+                }}
+                className="px-4 py-2 bg-slate-700 text-slate-200 rounded hover:bg-slate-600"
+              >
+                No
+              </button>
+              <button
+                onClick={handleCancelClick}
+                disabled={!cancelMotivo.trim() || cancelMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+              >
+                {cancelMutation.isPending ? 'Cancelando...' : 'Sí, Cancelar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

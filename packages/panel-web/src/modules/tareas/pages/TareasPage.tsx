@@ -193,18 +193,17 @@ export default function TareasPage() {
 
 // ------------------------------------------------------------------ listas ---
 
-type FiltroEstadoTab = 'pendientes' | 'hechas' | 'canceladas';
+type FiltroEstadoTab = 'pendientes' | 'hechas';
 
 const FILTRO_ESTADO_KEY = 'tareas-filtro-estado';
 const etiquetasFiltroEstado: Record<FiltroEstadoTab, string> = {
   pendientes: 'Pendientes',
   hechas: 'Hechas',
-  canceladas: 'Canceladas',
 };
 
 function leerFiltroEstadoGuardado(): FiltroEstadoTab {
   const guardado = localStorage.getItem(FILTRO_ESTADO_KEY);
-  return guardado === 'hechas' || guardado === 'canceladas' ? guardado : 'pendientes';
+  return guardado === 'hechas' ? guardado : 'pendientes';
 }
 
 function ListaTareas({
@@ -236,7 +235,7 @@ function ListaTareas({
       ? { pendientes: true as const }
       : filtroEstado === 'hechas'
         ? { estado: 'hecha' as EstadoTarea }
-        : { estado: 'cancelada' as EstadoTarea };
+        : { estado: 'hecha' as EstadoTarea };
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['tareas', filtro, filtroEstado, soloSinTomar],

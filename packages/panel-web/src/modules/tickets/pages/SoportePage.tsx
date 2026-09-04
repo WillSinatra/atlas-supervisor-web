@@ -18,6 +18,9 @@ import {
   ShieldCheck,
   WifiOff,
   Hand,
+  X,
+  History,
+  ChevronDown,
 } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
@@ -26,16 +29,17 @@ import { Input } from '@/shared/components/ui/Input';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { Alert } from '@/shared/components/ui/Alert';
 import { Modal } from '@/shared/components/ui/Modal';
-import { mensajeDeError, ticketsBetaApi } from '@/shared/services/api';
+import { mensajeDeError, ticketsBetaApi, api } from '@/shared/services/api';
 import { TIPOS_ORDEN, tipoOrdenLabels, prioridadBadgeVariant, prioridadLabels } from '@/shared/constants/ordenLabels';
 import { etiquetasMotivoTicket } from '@/types/atlas';
 import type { TicketBeta } from '@/types/atlas';
+import { AdjuntosTicketCard } from '@/modules/tickets/components/AdjuntosTicketCard';
 import { VerificacionTicketCard } from '@/modules/tickets/components/VerificacionTicketCard';
 import { CreateTicketModal } from '@/modules/orders/components/CreateTicketModal';
-import { AdjuntosTicketCard } from '@/modules/tickets/components/AdjuntosTicketCard';
 import { useAreas } from '@/modules/tickets/hooks';
 import { useTomarTicket } from '../hooks/useTomarTicket';
-import { useSoltarTicket } from '../hooks/useSoltarTicket';
+import { useLiberarTicket } from '../hooks/useLiberarTicket';
+import { generateGradient } from '../utils/gradientUtils';
 /**
 
  *
@@ -50,8 +54,13 @@ import { useSoltarTicket } from '../hooks/useSoltarTicket';
  * cola.
  */
 export default function SoportePage() {
-  const navigate = useNavigate();
+  const { mutate: tomarTicket } = useTomarTicket();
+  const { mutate: liberarTicket } = useLiberarTicket();
+  const [showLiberarModal, setShowLiberarModal] = useState(false);
+  const [liberarMotivo, setLiberarMotivo] = useState('');
+  const [liberarJustificacion, setLiberarJustificacion] = useState('');
   const { data: areas = [] } = useAreas();
+  const navigate = useNavigate();
   const [busqueda, setBusqueda] = useState('');
   const [tipo, setTipo] = useState('');
   const [areaId, setAreaId] = useState('');
@@ -59,10 +68,17 @@ export default function SoportePage() {
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
   /** null = cerrado · 'nuevo' = alta · un ticket = edición. */
   const [editando, setEditando] = useState<TicketBeta | 'nuevo' | null>(null);
-  const [enProceso, setEnProceso] = useState<string[]>([]);
-  const { mutate: tomarTicket, isPending: isTomando } = useTomarTicket();
-  const { mutate: soltarTicket, isPending: isSoltando } = useSoltarTicket();
-
+  const [historialData, setHistorialData] = useState<any[]>([]);
+  const [expandedEmpleado, setExpandedEmpleado] = useState<string | null>(null);
+  const historialQuery = useQuery({
+    queryKey: ['tickets-historial'],
+    queryFn: async () => {
+      const res = await api.get('/v1/tickets-beta/estadisticas/historial');
+      return res.data.data;
+    },
+    enabled: estadoFiltro.includes('historial'),
+    staleTime: 60000,
+  });
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['tickets-beta', { tipo, estadoFiltro, areaId }],
     queryFn: () => {
@@ -121,7 +137,7 @@ export default function SoportePage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Inbox</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Soporte</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Los reclamos que entran por el portal, el bot o carga manual. N2 verifica lo que se puede resolver
             sin ir al domicilio, y recién después se convierten en orden de trabajo.
@@ -183,7 +199,7 @@ export default function SoportePage() {
                 >
                   En Proceso
                 </button>
-                <button
+               <button
                   type="button"
                   onClick={() => setEstadoFiltro(['convertido_a_ot'])}
                   className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${estadoFiltro.length === 1 && estadoFiltro.includes('convertido_a_ot')
@@ -202,6 +218,16 @@ export default function SoportePage() {
                     }`}
                 >
                   Resuelto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEstadoFiltro(['historial'])}
+                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${estadoFiltro.length === 1 && estadoFiltro.includes('historial')
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                    }`}
+                >
+                  Historial
                 </button>
               </div>
             </div>
@@ -224,6 +250,10 @@ export default function SoportePage() {
                 }
               />
             </div>
+          ) : estadoFiltro.includes('historial') ? (
+           <div className="card p-5 flex items-center justify-center h-40">
+              <p className="text-slate-500 dark:text-slate-400">Estadísticas al lado derecho</p>
+            </div>
           ) : tickets.length === 0 ? (
             <div className="card">
               <EmptyState
@@ -240,6 +270,14 @@ export default function SoportePage() {
                   ticket={t}
                   activo={ticket?.id === t.id}
                   onClick={() => setSeleccionado(t.id)}
+                  onLiberarClick={() => setShowLiberarModal(true)}
+                  showLiberarModal={showLiberarModal}
+                  liberarMotivo={liberarMotivo}
+                  setLiberarMotivo={setLiberarMotivo}
+                  liberarJustificacion={liberarJustificacion}
+                  setLiberarJustificacion={setLiberarJustificacion}
+                  liberarTicket={liberarTicket}
+                  setShowLiberarModal={setShowLiberarModal}
                 />
               ))}
             </div>
@@ -247,14 +285,120 @@ export default function SoportePage() {
         </div>
 
         {/* ──────────────────────────── detalle ─────────────────────────── */}
-        {ticket ? (
+        {estadoFiltro.includes('historial') ? (
+          <div className="card p-5">
+            {historialQuery.isLoading ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-atlas-600" />
+              </div>
+            ) : historialQuery.data?.length === 0 ? (
+              <EmptyState
+                icon={<History className="w-8 h-8" />}
+                title="Sin datos"
+                description="No hay datos de historial disponibles."
+              />
+            ) : (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Estadísticas por Empleado</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700">
+                        <th className="text-left py-2 px-3 font-semibold text-slate-600 dark:text-slate-300">Empleado</th>
+                        <th className="text-left py-2 px-3 font-semibold text-slate-600 dark:text-slate-300">Área</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-600 dark:text-slate-300">Tomados</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-600 dark:text-slate-300">Resueltos</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-600 dark:text-slate-300">Liberados</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historialQuery.data?.map((emp: any) => {
+                        const coloresEmpleados: Record<string, string> = {
+                          'Iben Saud': '#8B4513',
+                          'Lucas Ledesma': '#FFD700',
+                          'Jose Fermin': '#FF0000',
+                          'Alex Fressoni': '#8B00FF',
+                          'Adrian Cordoliani': '#FFA500',
+                          'Leo Maffia': '#00AA00',
+                          'Silvina Santillan': '#FF69B4',
+                        };
+                        const color = coloresEmpleados[emp.nombre] || '#999';
+                        const isExpanded = expandedEmpleado === emp.id;
+                        const liberacionesArray = emp.liberaciones?.filter((l: any) => l !== null) || [];
+                        return (
+                          <>
+                            <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: color }} />
+                                  <span className="text-slate-900 dark:text-white font-medium">{emp.nombre}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 text-slate-600 dark:text-slate-400">{emp.area || '—'}</td>
+                              <td className="py-3 px-3 text-center">
+                                <div className="font-semibold text-atlas-600 dark:text-atlas-400">{emp.total_tomados}</div>
+                                <div className="text-xs text-slate-500">{emp.porcentaje_tomados}%</div>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <div className="font-semibold text-emerald-600 dark:text-emerald-400">{emp.porcentaje_resueltos}%</div>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <button
+                                  onClick={() => setExpandedEmpleado(isExpanded ? null : emp.id)}
+                                  className="flex items-center justify-center gap-1 w-full font-semibold text-yellow-600 dark:text-yellow-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded p-1"
+                                >
+                                  {emp.total_liberados}
+                                  <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded && liberacionesArray.length > 0 && (
+                              <tr className="bg-slate-50 dark:bg-slate-800">
+                                <td colSpan={5} className="py-3 px-6">
+                                  <div className="space-y-2">
+                                    <h4 className="font-semibold text-slate-900 dark:text-white text-sm">Detalles de Liberaciones:</h4>
+                                    {liberacionesArray.map((lib: any, idx: number) => (
+                                      <div key={idx} className="text-sm bg-slate-100 dark:bg-slate-700 p-2 rounded">
+                                        <p><strong>Motivo:</strong> {lib.motivo || '—'}</p>
+                                        <p><strong>Justificación:</strong> {lib.justificacion || '—'}</p>
+                                        <p className="text-xs text-slate-500">{new Date(lib.fecha).toLocaleString('es-AR')}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : ticket ? (
           <Detalle
             ticket={ticket}
             onEditar={() => setEditando(ticket)}
             onConvertir={() => convertir(ticket, navigate)}
-            onTomar={tomarTicket}
-            isTomando={Boolean(isTomando)}
-          />
+            onTomar={() => {
+              tomarTicket(ticket.id, {
+                onSuccess: () => {
+                  setEstadoFiltro(['en_proceso']);
+                  setSeleccionado(null);
+                }
+              });
+            }}
+            onLiberarClick={() => setShowLiberarModal(true)}
+            showLiberarModal={showLiberarModal}
+            liberarMotivo={liberarMotivo}
+            setLiberarMotivo={setLiberarMotivo}
+            liberarJustificacion={liberarJustificacion}
+            setLiberarJustificacion={setLiberarJustificacion}
+            liberarTicket={liberarTicket}
+            setShowLiberarModal={setShowLiberarModal}
+            />
         ) : (
           <div className="card">
             <EmptyState
@@ -281,10 +425,26 @@ function FilaTicket({
   ticket,
   activo,
   onClick,
+  onLiberarClick,
+  showLiberarModal,
+  liberarMotivo,
+  setLiberarMotivo,
+  liberarJustificacion,
+  setLiberarJustificacion,
+  liberarTicket,
+  setShowLiberarModal,
 }: {
   ticket: TicketBeta;
   activo: boolean;
   onClick: () => void;
+  onLiberarClick: () => void;
+  showLiberarModal: boolean;
+  liberarMotivo: string;
+  setLiberarMotivo: (v: string) => void;
+  liberarJustificacion: string;
+  setLiberarJustificacion: (v: string) => void;
+  liberarTicket: any;
+  setShowLiberarModal: (v: boolean) => void;
 }) {
   const pendientes = ticket.verificacion_pendiente ?? 0;
   const fotos = ticket.fotos_total ?? 0;
@@ -293,15 +453,16 @@ function FilaTicket({
     <button
       type="button"
       onClick={onClick}
-      style={{
-        backgroundImage: ticket.tomado_por_id 
-          ? `linear-gradient(135deg, ${ticket.color_asignado}dd, ${ticket.color_asignado}99)`
-          : 'linear-gradient(135deg, rgba(51, 65, 85, 0.5), rgba(30, 41, 59, 0.5))',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-      }}
-      className={`w-full text-left card p-3 transition-all ${activo
-        ? 'ring-2 ring-blue-400 shadow-lg'
-        : 'hover:shadow-md'
+style={{
+  backgroundImage: (ticket.estado === 'en_proceso' || ticket.estado === 'resuelto') && ticket.color_asignado 
+    ? generateGradient(ticket.color_asignado) 
+    : undefined,
+  boxShadow: (ticket.estado === 'en_proceso' || ticket.estado === 'resuelto') ? '0 12px 32px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(0, 0, 0, 0.2)' : 'none',
+  border: ticket.estado === 'nuevo' || ticket.estado === 'convertido_a_ot' ? '2px solid #6b7280' : ticket.estado === 'resuelto' && !ticket.color_asignado ? '2px solid #6b7280' : ticket.estado === 'resuelto' ? '2px solid rgba(255, 255, 255, 0.3)' : 'none'
+}}
+      className={`w-full text-left card p-3 transition-colors  ${activo
+        ? 'ring-2 ring-atlas-500 bg-atlas-50/50 dark:bg-atlas-900/20'
+        : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'
         }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -310,20 +471,17 @@ function FilaTicket({
         </p>
         <Badge variant={prioridadBadgeVariant[ticket.prioridad]}>{prioridadLabels[ticket.prioridad]}</Badge>
       </div>
-
-      <p className="text-xs text-slate-200 dark:text-slate-100 mt-1 truncate font-medium">
+       <p className={`text-xs ${ticket.estado === 'en_proceso' || ticket.estado === 'resuelto' ? 'text-white' : 'text-slate-400 dark:text-slate-500'} mt-0.5 flex items-center gap-1`}>
         {tipoOrdenLabels[ticket.tipo as keyof typeof tipoOrdenLabels] ?? ticket.tipo}
         {ticket.motivo ? ` · ${etiquetasMotivoTicket[ticket.motivo as keyof typeof etiquetasMotivoTicket] ?? ticket.motivo}` : ''}
       </p>
-
-      {ticket.direccion && (
-        <p className={`text-xs mt-0.5 flex items-center gap-1 ${ticket.tomado_por_id ? 'text-white' : 'text-slate-100 dark:text-slate-200 opacity-90'}`}>
-          <MapPin className="w-3 h-3 shrink-0" /> {ticket.direccion}
+{ticket.direccion && (
+  <p className={`text-xs ${ticket.estado === 'en_proceso' || ticket.estado === 'resuelto' ? 'text-white' : 'text-slate-400 dark:text-slate-500'} mt-0.5 truncate flex items-center gap-1`}>
+    <MapPin className="w-3 h-3 shrink-0" /> {ticket.direccion}
         </p>
       )}
-
       {ticket.creado_en && (
-        <p className={`text-xs mt-0.5 flex items-center gap-1 ${ticket.tomado_por_id ? 'text-white' : 'text-slate-400 dark:text-slate-500'}`}>
+<p className={`text-xs ${ticket.estado === 'en_proceso' || ticket.estado === 'resuelto' ? 'text-white' : 'text-slate-400 dark:text-slate-500'} mt-0.5 flex items-center gap-1`}>
           <Clock className="w-3 h-3 shrink-0" />
           {new Date(ticket.creado_en).toLocaleDateString('es-AR')} {new Date(ticket.creado_en).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -336,11 +494,9 @@ function FilaTicket({
               {pendientes} sin verificar
             </span>
           )}
-          {/* Que el reclamo trae una foto es medio diagnóstico: se ve desde
-              acá para no tener que abrir ticket por ticket buscándola. */}
           {fotos > 0 && (
             <span
-              className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"
+              className={`text-xs ${ticket.estado === 'en_proceso' || ticket.estado === 'resuelto' ? 'text-white' : 'text-slate-500 dark:text-slate-400'} flex items-center gap-1`}
               title={fotos === 1 ? '1 imagen adjunta' : `${fotos} imágenes adjuntas`}
             >
               <Paperclip className="w-3 h-3 shrink-0" />
@@ -358,16 +514,29 @@ function Detalle({
   onEditar,
   onConvertir,
   onTomar,
-  isTomando,
+  onLiberarClick,
+  showLiberarModal,
+  liberarMotivo,
+  setLiberarMotivo,
+  liberarJustificacion,
+  setLiberarJustificacion,
+  liberarTicket,
+  setShowLiberarModal,
 }: {
   ticket: TicketBeta;
   onEditar: () => void;
   onConvertir: () => void;
-  onTomar: (id: string) => void;
-  isTomando?: boolean;
+  onTomar?: () => void;
+  onLiberarClick: () => void;
+  showLiberarModal: boolean;
+  liberarMotivo: string;
+  setLiberarMotivo: (v: string) => void;
+  liberarJustificacion: string;
+  setLiberarJustificacion: (v: string) => void;
+  liberarTicket: any;
+  setShowLiberarModal: (v: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-  const loadingTomar = Boolean(isTomando);
   // El listado ya trae el estado; la card lo refresca al responder un ítem.
   const [completo, setCompleto] = useState(ticket.verificacion_completa ?? true);
   const [resolviendo, setResolviendo] = useState(false);
@@ -422,16 +591,20 @@ function Detalle({
                 <Button
                   variant="secondary"
                   icon={<Hand className="w-4 h-4" />}
-                  onClick={() => {
-                    if (confirm('¿Confirmar que tomas este ticket?')) {
-                     onTomar(ticket.id);
-                    }
-                  }}
+                  onClick={onTomar}
                   disabled={ticket.estado !== 'nuevo' || !!ticket.tomado_por_id}
-                  title={ticket.tomado_por_id ? 'Ya está tomado' : 'Tomar este ticket'}
-                  loading={loadingTomar}
+                  title={ticket.tomado_por_id ? 'Ya está tomado' : 'Tomar este reclamo'}
                 >
                   Tomar
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<X className="w-4 h-4" />}
+                  onClick={() => setShowLiberarModal(true)}
+                  disabled={ticket.estado === 'resuelto' || !ticket.tomado_por_id}
+                  title={!ticket.tomado_por_id ? 'El reclamo no está tomado' : 'Liberar este reclamo'}
+                >
+                  Liberar
                 </Button>
                 {/* El desenlace más común de un buen N2: se arregló por teléfono
                     y no hace falta mandar a nadie. */}
@@ -542,6 +715,62 @@ function Detalle({
           </div>
         </div>
       </Modal>
+      {showLiberarModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-900 rounded-lg p-6 max-w-sm w-full mx-4 border border-slate-700">
+            <h3 className="text-lg font-semibold text-yellow-400 mb-4">Liberar Reclamo</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Motivo</label>
+                <input
+                  type="text"
+                  value={liberarMotivo}
+                  onChange={(e) => setLiberarMotivo(e.target.value)}
+                  placeholder="Ej: No se puede contactar al cliente"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-slate-100 placeholder-slate-400 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Justificación</label>
+                <textarea
+                  value={liberarJustificacion}
+                  onChange={(e) => setLiberarJustificacion(e.target.value)}
+                  placeholder="Detalles adicionales..."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-slate-100 placeholder-slate-400 text-sm"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <button
+                onClick={() => {
+                  setShowLiberarModal(false);
+                  setLiberarMotivo('');
+                  setLiberarJustificacion('');
+                }}
+                className="px-4 py-2 bg-slate-700 text-slate-200 rounded hover:bg-slate-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  liberarTicket({
+                    ticketId: ticket.id,
+                    motivo: liberarMotivo,
+                    justificacion: liberarJustificacion,
+                  });
+                  setShowLiberarModal(false);
+                  setLiberarMotivo('');
+                  setLiberarJustificacion('');
+                }}
+                className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+              >
+                Liberar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

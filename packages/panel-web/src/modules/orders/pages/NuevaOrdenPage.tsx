@@ -7,7 +7,7 @@ import { Select } from '@/shared/components/ui/Select';
 import { Button } from '@/shared/components/ui/Button';
 import { Alert } from '@/shared/components/ui/Alert';
 import { ordenesApi, clientesApi, cuadrillasApi, camposInvalidos, mensajeDeError } from '@/shared/services/api';
-import { FALLAS, tipoOrdenLabels } from '@/shared/constants/ordenLabels';
+import { FALLAS, tipoOrdenLabels, TIPOS_ORDEN } from '@/shared/constants/ordenLabels';
 import type { Falla, TipoOrden } from '@/shared/constants/ordenLabels';
 import { OrdenCamposComunes, type CamposComunesValues } from '@/modules/orders/components/OrdenCamposComunes';
 import type { CrearOrdenInput, PrioridadOrden, Cliente } from '@/types/atlas';
@@ -279,8 +279,12 @@ export default function NuevaOrdenPage() {
     const nuevosErrores: Partial<Record<keyof FormState, string>> = {};
     if (!form.tipo) nuevosErrores.tipo = 'Seleccioná un tipo de orden.';
     if (!form.prioridad) nuevosErrores.prioridad = 'Seleccioná una prioridad.';
-    if (!form.cliente_id) nuevosErrores.cliente_id = 'Buscá y seleccioná un cliente.';
-    if (!form.domicilio_id) nuevosErrores.domicilio_id = 'Seleccioná un domicilio del cliente.';
+    
+    // Cliente y domicilio opcionales si es Ampliación de Red
+    if (form.tipo !== 'ampliacion_red') {
+      if (!form.cliente_id) nuevosErrores.cliente_id = 'Buscá y seleccioná un cliente.';
+      if (!form.domicilio_id) nuevosErrores.domicilio_id = 'Seleccioná un domicilio del cliente.';
+    }
     setErrors(nuevosErrores);
     return Object.keys(nuevosErrores).length === 0;
   };
@@ -368,9 +372,11 @@ export default function NuevaOrdenPage() {
           onChange={(e) => setField('tipo', e.target.value as TipoOrden)}
         />
 
-        <div className="relative">
+        
+        {form.tipo !== 'ampliacion_red' && (
+	<div className="relative">
           <Input
-            label="Cliente *"
+	    label={(form.tipo as any) === 'ampliacion_red' ? 'Cliente' : 'Cliente *'}
             placeholder="Buscar por nombre, teléfono o email..."
             leftIcon={<Search className="w-4 h-4 text-slate-400" />}
             error={errors.cliente_id}
@@ -471,19 +477,30 @@ export default function NuevaOrdenPage() {
               </Button>
             </div>
           )}
-        </div>
-
-        <Select
-          label="Domicilio *"
-          placeholder={
-            !form.cliente_id ? 'Elegí un cliente primero' : cargandoDomicilios ? 'Cargando...' : 'Seleccionar domicilio'
-          }
-          value={form.domicilio_id}
-          error={errors.domicilio_id}
-          options={domicilioOptions}
-          disabled={!form.cliente_id || cargandoDomicilios}
-          onChange={(e) => setField('domicilio_id', e.target.value)}
-        />
+	</div>
+	)}
+       
+	  {form.tipo === 'ampliacion_red' ? (
+          <Input
+            label="Zona"
+            placeholder="Ej: Zona Norte, Parque Industrial"
+            value={form.zona}
+            onChange={(e) => setField('zona', e.target.value)}
+            error={errors.zona}
+          />
+        ) : (
+          <Select
+            label="Domicilio *"
+            placeholder={
+              !form.cliente_id ? 'Elegí un cliente primero' : cargandoDomicilios ? 'Cargando...' : 'Seleccionar domicilio'
+            }
+            value={form.domicilio_id}
+            error={errors.domicilio_id}
+            options={domicilioOptions}
+            disabled={!form.cliente_id || cargandoDomicilios}
+            onChange={(e) => setField('domicilio_id', e.target.value)}
+          />
+        )}
 
         {/* El responsable no se elige: sale de esta cuadrilla. */}
         <div>

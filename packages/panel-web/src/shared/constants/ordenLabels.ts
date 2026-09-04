@@ -24,7 +24,7 @@ export const prioridadBadgeVariant: Record<PrioridadOrden, BadgeVariant> = {
 };
 
 // El backend no valida `tipo`: esta lista es la restricción que impone el panel.
-export const TIPOS_ORDEN = ['instalacion', 'reparacion', 'mantenimiento', 'baja', 'upgrade'] as const;
+export const TIPOS_ORDEN = ['instalacion', 'reparacion', 'mantenimiento', 'baja', 'upgrade', 'ampliacion_red'] as const;
 export type TipoOrden = (typeof TIPOS_ORDEN)[number];
 
 export const tipoOrdenLabels: Record<TipoOrden, string> = {
@@ -33,6 +33,7 @@ export const tipoOrdenLabels: Record<TipoOrden, string> = {
   mantenimiento: 'Mantenimiento',
   baja: 'Baja',
   upgrade: 'Upgrade',
+  ampliacion_red: 'Ampliación de Red',
 };
 
 // Solo aplica cuando tipo = reparacion.

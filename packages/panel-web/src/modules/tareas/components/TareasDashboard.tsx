@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, Clock, RotateCcw, Trash2 } from 'lucide-react';
+import { CheckCircle2, Clock, RotateCcw } from 'lucide-react';
 import { tareasApi } from '@/shared/services/tareas';
 
 export function TareasDashboard() {
-  // Solo traer mis tareas pendientes y en curso (lo que importa)
   const { data: misTareas = [] } = useQuery({
     queryKey: ['tareas', 'dashboard'],
     queryFn: () => tareasApi.listar({ 
@@ -14,7 +13,6 @@ export function TareasDashboard() {
     staleTime: 30 * 1000,
   });
 
-  // Tareas en curso
   const { data: misTareasEnCurso = [] } = useQuery({
     queryKey: ['tareas', 'en-curso'],
     queryFn: () => tareasApi.listar({ 
@@ -25,7 +23,6 @@ export function TareasDashboard() {
     staleTime: 30 * 1000,
   });
 
-  // Tareas completadas hoy
   const { data: completadas = [] } = useQuery({
     queryKey: ['tareas', 'completadas'],
     queryFn: () => tareasApi.listar({ 
@@ -44,8 +41,7 @@ export function TareasDashboard() {
     pendiente: tareasPendientesArray.length,
     en_curso: tareasEnCursoArray.length,
     hecha: tareasCompletadasArray.length,
-    cancelada: tareasCompletadasArray.length,  
-};
+  };
 
   const tarjetas = [
     {
@@ -75,27 +71,16 @@ export function TareasDashboard() {
       textColor: 'text-green-600 dark:text-green-400',
       bgHover: 'hover:from-green-500/30 hover:to-emerald-500/30',
     },
-    {
-      label: 'Cancelada',
-      valor: contadores.cancelada || 0,
-      icon: <Trash2 className="w-5 h-5" />,
-      color: 'from-red-500/20 to-rose-500/20',
-      border: 'border-red-500/50',
-      textColor: 'text-red-600 dark:text-red-400',
-      bgHover: 'hover:from-red-500/30 hover:to-rose-500/30',
-    },  
-
-];
+  ];
 
   return (
-    <div className="grid grid-cols-4  gap-3 mb-8">
+    <div className="grid grid-cols-3 gap-3 mb-8">
       {tarjetas.map((tarjeta) => (
         <div
           key={tarjeta.label}
-          className={`
-            bg-gradient-to-br ${tarjeta.color} ${tarjeta.bgHover}
+          className={`bg-gradient-to-br ${tarjeta.color} ${tarjeta.bgHover}
             border ${tarjeta.border}
-            rounded-lg p-5 backdrop-blur-sm
+            rounded-lg p-7 backdrop-blur-sm
             transition-all duration-300
             shadow-lg shadow-black/20
             hover:shadow-xl hover:shadow-black/30

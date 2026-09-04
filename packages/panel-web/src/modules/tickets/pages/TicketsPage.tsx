@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Search, X } from 'lucide-react';
+import { FileText, Search, X, History } from 'lucide-react';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
-import { cuadrillasApi, ticketsBetaApi, mensajeDeError } from '@/shared/services/api';
+import { api, cuadrillasApi, ticketsBetaApi, mensajeDeError } from '@/shared/services/api';
 import { tipoOrdenLabels } from '@/shared/constants/ordenLabels';
 import { etiquetasPrioridad } from '@/types/atlas';
 import type { TicketBeta } from '@/types/atlas';
 import { CreateTicketModal } from '@/modules/orders/components/CreateTicketModal';
 import { TicketDetailModal } from '@/modules/tickets/TicketDetailModal';
+
+interface TicketEliminado {
+  id: string;
+  ticket_numero: string;
+  ticket_cliente: string;
+  ticket_tipo: string;
+  eliminado_por_nombre: string;
+  razon: string;
+  eliminado_en: string;
+}
 
 const estadoBadge: Record<string, 'neutral' | 'info' | 'warning'> = {
   nuevo: 'neutral',
@@ -54,8 +64,8 @@ export default function TicketsPage() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [enEdicion, setEnEdicion] = useState<TicketBeta | null>(null);
   const [viendo, setViendo] = useState<TicketBeta | null>(null);
-  const [page, setPage] = useState(1);
-  // El texto se espera a que dejen de tipear; el resto se aplica al toque.
+  const [page, setPage] = useState(1);  
+// El texto se espera a que dejen de tipear; el resto se aplica al toque.
   useEffect(() => {
     const id = setTimeout(() => setAplicados(filtros), 300);
     return () => clearTimeout(id);
@@ -82,6 +92,14 @@ export default function TicketsPage() {
     },
   });
 
+const { data: dataEliminados, isLoading: cargandoEliminados } = useQuery({
+  queryKey: ['tickets-eliminados'],
+  queryFn: async () => {
+    const res = await api.get('/v1/tickets-beta/eliminados/historial');
+    return res.data;
+  },
+});
+
   const tickets = data?.data ?? [];
   const hayFiltros = Object.values(aplicados).some((v) => v.trim() !== '');
 
@@ -93,7 +111,10 @@ export default function TicketsPage() {
     setModalAbierto(true);
   };
 
-  return (
+    const eliminados: TicketEliminado[] = dataEliminados?.data || [];
+  const [activeTab, setActiveTab] = useState<'activos' | 'historial'>('activos');
+  const [viendoEliminado, setViendoEliminado] = useState<TicketEliminado | null>(null);
+ return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -105,10 +126,40 @@ export default function TicketsPage() {
             Captura rápida de trabajos. Cada uno se puede convertir en orden de trabajo.
           </p>
         </div>
-        <Button variant="primary" icon={<FileText className="w-4 h-4" />} onClick={abrirAlta}>
-          Crear ticket
-        </Button>
+        {activeTab === 'activos' && (
+          <Button variant="primary" icon={<FileText className="w-4 h-4" />} onClick={abrirAlta}>
+            Crear ticket
+          </Button>
+        )}
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
+        <button
+          onClick={() => setActiveTab('activos')}
+          className={`px-4 py-2 border-b-2 font-medium transition-colors ${
+            activeTab === 'activos'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-slate-600 dark:text-slate-400'
+          }`}
+        >
+          Activos
+        </button>
+        <button
+          onClick={() => setActiveTab('historial')}
+          className={`px-4 py-2 border-b-2 font-medium flex items-center gap-2 transition-colors ${
+            activeTab === 'historial'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-slate-600 dark:text-slate-400'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          Historial
+        </button>
+      </div>
+
+      {activeTab === 'activos' && (
+        <>
 
       <CreateTicketModal
         open={modalAbierto}
@@ -302,6 +353,125 @@ export default function TicketsPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+        </>
+      )}
+
+      {/* Historial Tab */}
+      {activeTab === 'historial' && (
+        <div className="space-y-4">
+          {cargandoEliminados ? (
+            <div className="card text-center py-8 text-slate-500">Cargando historial...</div>
+          ) : eliminados.length === 0 ? (
+            <div className="card">
+              <EmptyState
+                icon={<History className="w-8 h-8" />}
+                title="Sin historial"
+                description="No hay tickets eliminados aún."
+              />
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <th className="px-4 py-3">Cliente</th>
+                      <th className="px-4 py-3">Tipo</th>
+                      <th className="px-4 py-3">Eliminado Por</th>
+                      <th className="px-4 py-3">Motivo</th>
+                      <th className="px-4 py-3">Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eliminados.map((elim) => (
+                      <tr
+                        key={elim.id}
+                        onClick={() => setViendoEliminado(elim)}
+                        className="cursor-pointer border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30"
+                      >
+                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">
+                          {elim.ticket_cliente}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                          {tipoOrdenLabels[elim.ticket_tipo as keyof typeof tipoOrdenLabels] ?? elim.ticket_tipo ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                          {elim.eliminado_por_nombre}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                          {elim.razon || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                          {new Date(elim.eliminado_en).toLocaleDateString('es-AR')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+       )}
+
+      {/* Modal Preview Eliminado */}
+      {viendoEliminado && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40">
+          <div className="bg-slate-900 rounded-lg p-6 max-w-2xl w-full mx-4 border border-slate-700 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-100">Ticket Eliminado</h3>
+              <button
+                onClick={() => setViendoEliminado(null)}
+                className="text-slate-400 hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-400 uppercase">Cliente</p>
+                  <p className="text-slate-100 font-medium">{viendoEliminado.ticket_cliente}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 uppercase">Tipo</p>
+                  <p className="text-slate-100 font-medium">
+                    {tipoOrdenLabels[viendoEliminado.ticket_tipo as keyof typeof tipoOrdenLabels] ?? viendoEliminado.ticket_tipo}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-400 uppercase">Eliminado Por</p>
+                  <p className="text-slate-100">{viendoEliminado.eliminado_por_nombre}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 uppercase">Fecha</p>
+                  <p className="text-slate-100">{new Date(viendoEliminado.eliminado_en).toLocaleDateString('es-AR')}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-400 uppercase">Motivo</p>
+                <p className="text-slate-100 bg-slate-800/50 rounded px-3 py-2">
+                  {viendoEliminado.razon || '(Sin especificar)'}
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-700">
+                <button
+                  onClick={() => setViendoEliminado(null)}
+                  className="w-full px-4 py-2 bg-slate-700 text-slate-200 rounded hover:bg-slate-600"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

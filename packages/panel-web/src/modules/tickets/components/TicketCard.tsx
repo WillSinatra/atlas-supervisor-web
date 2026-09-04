@@ -1,4 +1,6 @@
 import { TicketBeta } from '@/types/atlas';
+import { useState } from 'react';
+import { LiberarTicketModal } from './LiberarTicketModal';
 
 interface TicketCardProps {
   ticket: TicketBeta;
@@ -17,10 +19,15 @@ export function TicketCard({
 }: TicketCardProps) {
   const bgColor = ticket.color_asignado || '#2E3B52';
   const isTomadomPorMi = ticket.tomado_por_id === usuarioEmpleadoId;
+  const [showLiberarModal, setShowLiberarModal] = useState(false);
+
+  const handleClick = () => {
+    console.log('CLICK DETECTED', ticket.estado, ticket.tomado_por_id, !!onTomar);
+  };
 
   return (
-    <div
-      className="p-4 rounded border-l-4 transition-all hover:shadow-lg"
+    <div onClick={handleClick}
+  className="p-4 rounded border-l-4 transition-all hover:shadow-lg cursor-pointer"
       style={{
         backgroundColor: bgColor,
         borderLeftColor: ticket.color_asignado || '#666',
@@ -82,16 +89,15 @@ export function TicketCard({
       )}
 
       <div className="mt-4 flex gap-2 flex-wrap">
-        {ticket.estado === 'nuevo' && !ticket.tomado_por_id && onTomar && (
-          <button
-            onClick={() => onTomar(ticket.id)}
-            disabled={isTomandoLoading}
-            className="flex-1 min-w-[120px] bg-white text-blue-600 font-bold py-2 px-3 rounded hover:bg-gray-100 disabled:opacity-50"
-          >
-            {isTomandoLoading ? '⏳' : '✋'} Tomar
-          </button>
-        )}
-
+{isTomadomPorMi && ticket.estado === 'en_proceso' && (
+  <button
+    onClick={() => setShowLiberarModal(true)}
+    disabled={isTomandoLoading}
+    className="flex-1 min-w-[120px] bg-orange-600 text-white font-bold py-2 px-3 rounded hover:bg-orange-700 disabled:opacity-50"
+  >
+    🔓 Liberar
+  </button>
+)}
         {isTomadomPorMi && ticket.estado === 'en_proceso' && onSoltar && (
           <button
             onClick={() => onSoltar(ticket.id)}
@@ -112,6 +118,15 @@ export function TicketCard({
           </button>
         )}
       </div>
+      <LiberarTicketModal
+        open={showLiberarModal}
+        ticketId={ticket.id}
+        onClose={() => setShowLiberarModal(false)}
+        onSuccess={() => {
+          setShowLiberarModal(false);
+          onSoltar?.(ticket.id);
+        }}
+      />
     </div>
   );
 }
