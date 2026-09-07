@@ -215,6 +215,7 @@ export interface Cuadrilla {
    * undefined = la API todavía no lo calcula (falta la migración del Pedido 11).
    */
   areas?: ReferenciaBasica[];
+  horario_disponibilidad?: { dias_semana: string[]; hora_inicio: string; hora_fin: string } | null;
 }
 
 export type EstadoTecnico = "activo" | "inactivo";
@@ -960,6 +961,7 @@ export interface TicketBeta {
   resuelto_por?: string | null;
   resuelto_por_nombre?: string | null; 
   resuelto_en: string | null; // ISO timestamp
+  numero?: string;
   resolucion?: string | null;
 }
 

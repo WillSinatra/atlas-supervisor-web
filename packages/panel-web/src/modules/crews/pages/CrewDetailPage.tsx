@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Truck, Users, Phone, Pencil, Trash2, Plus, WifiOff, ClipboardList, Package, Wrench } from 'lucide-react';
+import { ArrowLeft, Truck, Users, Phone, Pencil, Trash2, Plus, WifiOff, ClipboardList, Package, Wrench, Clock } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -197,7 +197,32 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor?: string | number |
   );
 }
 
+// Formatear días para visualización
+const formatDias = (dias: string[]): string => {
+  const diasOrdenados = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  const diasPresentes = diasOrdenados.filter(d => dias.includes(d));
+
+  // Si son de lunes a viernes (5 días)
+  if (diasPresentes.length === 5 && !dias.includes('sabado')) {
+    return 'Lunes - Viernes';
+  }
+
+  // Si incluye sábado pero no los otros 5
+  if (dias.includes('sabado') && diasPresentes.length === 6) {
+    return 'Lunes - Sábado';
+  }
+
+  // Si son algunos, capitalizar sin coma final
+  return diasPresentes
+    .map(d => d.charAt(0).toUpperCase() + d.slice(1))
+    .join(', ');
+};
+
+// Capitalizar primer día
+const capitalizeDia = (dia: string): string => dia.charAt(0).toUpperCase() + dia.slice(1);
+
 function DatosGeneralesCard({ crew, onSaved }: { crew: Cuadrilla; onSaved: () => void }) {
+  const queryClient = useQueryClient();
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({
     nombre: crew.nombre,
@@ -205,6 +230,9 @@ function DatosGeneralesCard({ crew, onSaved }: { crew: Cuadrilla; onSaved: () =>
     especialidad: crew.especialidad ?? '',
     zona: crew.zona ?? '',
     estado: crew.estado,
+    horario_dias: crew.horario_disponibilidad?.dias_semana?.join(',') ?? 'lunes,martes,miercoles,jueves,viernes',
+    horario_inicio: crew.horario_disponibilidad?.hora_inicio ?? '08:00',
+    horario_fin: crew.horario_disponibilidad?.hora_fin ?? '17:00',
   });
 
   const desdeCrew = () => ({
@@ -213,6 +241,9 @@ function DatosGeneralesCard({ crew, onSaved }: { crew: Cuadrilla; onSaved: () =>
     especialidad: crew.especialidad ?? '',
     zona: crew.zona ?? '',
     estado: crew.estado,
+    horario_dias: crew.horario_disponibilidad?.dias_semana?.join(',') ?? 'lunes,martes,miercoles,jueves,viernes',
+    horario_inicio: crew.horario_disponibilidad?.hora_inicio ?? '08:00',
+    horario_fin: crew.horario_disponibilidad?.hora_fin ?? '17:00',
   });
 
   useEffect(() => {
@@ -222,20 +253,32 @@ function DatosGeneralesCard({ crew, onSaved }: { crew: Cuadrilla; onSaved: () =>
   }, [crew]);
 
   const guardar = useMutation({
-    mutationFn: () =>
-      cuadrillasApi.actualizar(crew.id, {
+    mutationFn: () => {
+      return cuadrillasApi.actualizar(crew.id, {
         nombre: form.nombre.trim(),
         codigo: form.codigo.trim() || null,
         especialidad: form.especialidad.trim() || null,
         zona: form.zona.trim() || null,
         estado: form.estado,
-      }),
-    onSuccess: () => {
+        horario_disponibilidad: {
+          dias_semana: form.horario_dias.split(',').map(d => d.trim()),
+          hora_inicio: form.horario_inicio,
+          hora_fin: form.horario_fin,
+        },
+      });
+    },
+    onSuccess: (updatedCrew) => {
+
+      const newData = { ...crew, ...updatedCrew };
+
+      queryClient.setQueryData(['cuadrilla', crew.id], newData);
+
+      const cached = queryClient.getQueryData(['cuadrilla', crew.id]);
+
       onSaved();
       setEditando(false);
     },
   });
-
   const setCampo = (campo: keyof typeof form, valor: string) =>
     setForm((prev) => ({ ...prev, [campo]: valor }));
 
@@ -285,6 +328,60 @@ function DatosGeneralesCard({ crew, onSaved }: { crew: Cuadrilla; onSaved: () =>
               value={form.zona}
               onChange={(e) => setCampo('zona', e.target.value)}
             />
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Días de semana
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'].map((dia) => (
+                  <button
+                    key={dia}
+                    type="button"
+                    onClick={() => {
+                      const dias = form.horario_dias.split(',').map(d => d.trim());
+                      let nuevosDias: string[];
+
+                      if (dias.includes(dia)) {
+                        // Solo desmarcar si hay más de 1 día
+                        if (dias.length > 1) {
+                          nuevosDias = dias.filter(d => d !== dia);
+                        } else {
+                          // Si es el único día, no permitir desmarcar
+                          return;
+                        }
+                      } else {
+                        nuevosDias = [...dias, dia];
+                      }
+
+                      setCampo('horario_dias', nuevosDias.join(','));
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      form.horario_dias.includes(dia)
+                        ? 'bg-atlas-600 text-white'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    {dia.charAt(0).toUpperCase() + dia.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Input
+              label="Hora inicio"
+              type="time"
+              value={form.horario_inicio}
+              onChange={(e) => {
+                setCampo('horario_inicio', e.target.value);
+              }}
+            />
+            <Input
+              label="Hora fin"
+              type="time"
+              value={form.horario_fin}
+              onChange={(e) => {
+                setCampo('horario_fin', e.target.value);
+              }}
+            />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button
@@ -315,28 +412,46 @@ function DatosGeneralesCard({ crew, onSaved }: { crew: Cuadrilla; onSaved: () =>
           <Dato etiqueta="Especialidad" valor={crew.especialidad} />
           <Dato etiqueta="Zona" valor={crew.zona} />
           {crew.areas !== undefined && (
-            <div className="pt-2">
-              <p className="text-slate-500 dark:text-slate-400 mb-1">Trabajos que puede tomar</p>
-              {areas.length === 0 ? (
-                <p className="text-xs text-slate-400">
-                  Sale de las áreas de sus técnicos. Todavía no tiene ninguno del padrón.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-1">
-                  {areas.map((area) => (
-                    <Badge key={area.id} variant="info">
-                      {area.nombre}
-                    </Badge>
-                  ))}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-slate-500 dark:text-slate-400 mb-2 text-xs uppercase">Trabajos que puede tomar</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {areas.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    Sale de las áreas de sus técnicos. Todavía no tiene ninguno del padrón.
+                  </p>
+                ) : (
+                  <>
+                    {areas.map((area) => (
+                      <div key={area.id} className="px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-300 text-xs font-medium">
+                        {area.nombre}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          {crew.horario_disponibilidad && (
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="w-4 h-4 text-slate-500" />
+                <p className="text-slate-500 dark:text-slate-400 text-xs uppercase font-semibold">Disponibilidad</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <div className="px-3 py-1.5 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-300 text-xs font-medium">
+                  {formatDias(crew.horario_disponibilidad.dias_semana)}
                 </div>
-              )}
+                <div className="px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-xs font-medium">
+                  {crew.horario_disponibilidad.hora_inicio} - {crew.horario_disponibilidad.hora_fin}
+                </div>
+              </div>
             </div>
           )}
         </div>
       )}
     </div>
   );
-}
+}               
 
 function TechnicianRow({ tecnico, onChanged }: { tecnico: Tecnico; onChanged: () => void }) {
   const [editando, setEditando] = useState(false);

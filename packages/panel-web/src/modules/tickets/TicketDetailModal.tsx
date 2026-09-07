@@ -124,8 +124,13 @@ export function TicketDetailModal({ ticket, nombreCuadrilla, onClose, onEditar, 
               </Button>
               <Button
                 icon={<ArrowRight className="w-4 h-4" />}
-                onClick={() =>
-                  navigate('/orders/nueva', {
+              onClick={async () => {
+                // Actualizar ticket a convertido_a_ot
+                if (ticket?.id) {
+                  await api.patch(`/v1/tickets-beta/${ticket.id}`, { estado: 'convertido_a_ot' });
+                  queryClient.invalidateQueries({ queryKey: ['tickets'] });
+                }
+                navigate('/orders/nueva', {
                   state: {
                     desdeTicket: {
                       tipo: ticket.tipo,
@@ -141,7 +146,7 @@ export function TicketDetailModal({ ticket, nombreCuadrilla, onClose, onEditar, 
                     },
                   },
                 })
-              }
+              }}
             >
               Convertir en OT
             </Button>

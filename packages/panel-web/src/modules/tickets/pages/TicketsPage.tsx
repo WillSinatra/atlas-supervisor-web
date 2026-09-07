@@ -111,10 +111,18 @@ const { data: dataEliminados, isLoading: cargandoEliminados } = useQuery({
     setModalAbierto(true);
   };
 
+
     const eliminados: TicketEliminado[] = dataEliminados?.data || [];
   const [activeTab, setActiveTab] = useState<'activos' | 'historial'>('activos');
   const [viendoEliminado, setViendoEliminado] = useState<TicketEliminado | null>(null);
- return (
+  useEffect(() => {
+    if (activeTab === 'activos') {
+      setFiltro('estado', 'nuevo,en_proceso');
+    } else {
+      setFiltro('estado', 'resuelto,convertido_a_ot');
+    }
+  }, [activeTab]); 
+return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -283,6 +291,7 @@ const { data: dataEliminados, isLoading: cargandoEliminados } = useQuery({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  <th className="px-4 py-3">Número</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Dirección</th>
                   <th className="px-4 py-3">Tipo</th>
@@ -299,6 +308,9 @@ const { data: dataEliminados, isLoading: cargandoEliminados } = useQuery({
                     onClick={() => setViendo(ticket)}
                     className="cursor-pointer border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
                   >
+                    <td className="px-4 py-3 font-medium text-atlas-600 dark:text-atlas-400 uppercase text-xs">
+                      {ticket.numero || '—'}
+                    </td>
                     <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">
                       {ticket.cliente || '—'}
                     </td>

@@ -465,7 +465,13 @@ style={{
         : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'
         }`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-bold text-atlas-600 dark:text-atlas-400 uppercase tracking-wider">
+            {ticket.numero || 'S/N'}
+          </p>
+          <Badge variant={prioridadBadgeVariant[ticket.prioridad]}>{prioridadLabels[ticket.prioridad]}</Badge>
+        </div>
         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
           {ticket.cliente || 'Sin nombre'}
         </p>

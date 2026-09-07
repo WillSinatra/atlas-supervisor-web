@@ -9,12 +9,14 @@ import { mensajeDeError } from '@/shared/services/api';
 import { tareasApi } from '@/shared/services/tareas';
 import { EditorItems } from '@/modules/tareas/components/EditorItems';
 import { SelectorDestino, type TipoDestino } from '@/modules/tareas/components/SelectorDestino';
-import { etiquetasPrioridadTarea, type ItemInput, type PrioridadTarea } from '@/types/atlas';
+import { etiquetasPrioridadTarea, type ItemInput, type PrioridadTarea, type Tarea } from '@/types/atlas';
 
 interface TareaModalProps {
   open: boolean;
   onClose: () => void;
   onGuardada: () => void;
+  mode?: 'crear' | 'editar' | 'asignar';
+  tarea?: Tarea;
 }
 
 /**
@@ -25,7 +27,7 @@ interface TareaModalProps {
  * La edición de una tarea ya creada se hace desde la tarjeta del listado
  * (estado, ítems); esto es solo el alta.
  */
-export function TareaModal({ open, onClose, onGuardada }: TareaModalProps) {
+export function TareaModal({ open, onClose, onGuardada, mode = 'crear', tarea }: TareaModalProps) {
   const [titulo, setTitulo] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [tipoDestino, setTipoDestino] = useState<TipoDestino>('empleado');
@@ -38,16 +40,21 @@ export function TareaModal({ open, onClose, onGuardada }: TareaModalProps) {
 
   const guardar = useMutation({
     mutationFn: () =>
-      tareasApi.crear({
-        titulo: titulo.trim(),
-        // Se manda solo el destino elegido: el otro campo ni aparece, así el
-        // backend no tiene que adivinar cuál manda.
-        ...(tipoDestino === 'empleado' ? { empleado_id: empleadoId } : { area_id: areaId }),
-        descripcion: descripcion.trim() || null,
-        prioridad,
-        vence_el: venceEl ? venceEl : null,
-        items: items.filter((i) => i.texto.trim() !== ''),
-      }),
+      mode === 'crear'
+        ? tareasApi.crear({
+            titulo: titulo.trim(),
+            ...(tipoDestino === 'empleado' ? { empleado_id: empleadoId } : { area_id: areaId }),
+            descripcion: descripcion.trim() || null,
+            prioridad,
+            vence_el: venceEl ? venceEl : null,
+            items: items.filter((i) => i.texto.trim() !== ''),
+          })
+        : tareasApi.actualizar(tarea!.id, {
+            titulo: titulo.trim(),
+            descripcion: descripcion.trim() || null,
+            prioridad,
+            vence_el: venceEl ? venceEl : null,
+          }),
     onSuccess: onGuardada,
   });
 
@@ -63,6 +70,16 @@ export function TareaModal({ open, onClose, onGuardada }: TareaModalProps) {
     setItems([]);
     setErrores({});
     guardar.reset();
+    if (mode === 'editar' && tarea) {
+      setTitulo(tarea.titulo);
+      setDescripcion(tarea.descripcion || '');
+      setTipoDestino(tarea.empleado ? 'empleado' : 'area');
+      setEmpleadoId(tarea.empleado?.id ?? '');
+      setAreaId(tarea.area?.id ?? '');
+      setPrioridad(tarea.prioridad);
+      setVenceEl(tarea.vence_el ? new Date(tarea.vence_el).toISOString().slice(0, 16) : '');
+      setItems(tarea.items || []);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -77,15 +94,23 @@ export function TareaModal({ open, onClose, onGuardada }: TareaModalProps) {
     guardar.mutate();
   };
 
+  const mostrarTitulo = mode !== 'asignar';
+  const mostrarDescripcion = mode !== 'asignar';
+  const mostrarItems = mode !== 'asignar';
+
   return (
-    <Modal open={open} onClose={onClose} title="Nueva tarea" size="lg">
+    <Modal 
+      open={open} 
+      onClose={onClose} 
+      title={mode === 'crear' ? 'Nueva tarea' : mode === 'asignar' ? 'Asignar tarea' : 'Editar tarea'} 
+      size="lg">
       <form onSubmit={enviar} className="space-y-4">
         {guardar.isError && (
           <Alert variant="error" title="No se pudo crear la tarea">
             {mensajeDeError(guardar.error)}
           </Alert>
         )}
-
+      {mostrarTitulo && (
         <Input
           label="¿Qué hay que hacer? *"
           placeholder="Ej. Limpieza de oficinas"
@@ -93,7 +118,8 @@ export function TareaModal({ open, onClose, onGuardada }: TareaModalProps) {
           error={errores.titulo}
           onChange={(e) => setTitulo(e.target.value)}
         />
-
+      )}
+      {mostrarDescripcion && (
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
             Detalle
@@ -105,54 +131,55 @@ export function TareaModal({ open, onClose, onGuardada }: TareaModalProps) {
             onChange={(e) => setDescripcion(e.target.value)}
           />
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <SelectorDestino
-            tipo={tipoDestino}
-            empleadoId={empleadoId}
-            areaId={areaId}
-            onTipo={(t) => {
-              setTipoDestino(t);
-              setErrores((prev) => ({ ...prev, destino: undefined }));
-            }}
-            onEmpleado={(id) => {
-              setEmpleadoId(id);
-              setErrores((prev) => ({ ...prev, destino: undefined }));
-            }}
-            onArea={(id) => {
-              setAreaId(id);
-              setErrores((prev) => ({ ...prev, destino: undefined }));
-            }}
-            error={errores.destino}
-            activo={open}
-          />
-          <Select
-            label="Prioridad"
-            options={Object.entries(etiquetasPrioridadTarea).map(([value, label]) => ({ value, label }))}
-            value={prioridad}
-            onChange={(e) => setPrioridad(e.target.value as PrioridadTarea)}
-          />
-          <Input
-            label="Vence"
-            type="datetime-local"
-            value={venceEl}
-            onChange={(e) => setVenceEl(e.target.value)}
-          />
-        </div>
-
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <SelectorDestino
+          tipo={tipoDestino}
+          empleadoId={empleadoId}
+          areaId={areaId}
+          onTipo={(t) => {
+            setTipoDestino(t);
+            setErrores((prev) => ({ ...prev, destino: undefined }));
+          }}
+          onEmpleado={(id) => {
+            setEmpleadoId(id);
+            setErrores((prev) => ({ ...prev, destino: undefined }));
+          }}
+          onArea={(id) => {
+            setAreaId(id);
+            setErrores((prev) => ({ ...prev, destino: undefined }));
+          }}
+          error={errores.destino}
+          activo={open}
+        />
+        <Select
+          label="Prioridad"
+          options={Object.entries(etiquetasPrioridadTarea).map(([value, label]) => ({ value, label }))}
+          value={prioridad}
+          onChange={(e) => setPrioridad(e.target.value as PrioridadTarea)}
+        />
+        <Input
+          label="Vence"
+          type="datetime-local"
+          value={venceEl}
+          onChange={(e) => setVenceEl(e.target.value)}
+        />
+      </div>
+      {mostrarItems && (
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
           <EditorItems items={items} onChange={setItems} />
         </div>
-
-        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" loading={guardar.isPending}>
-            Crear tarea
-          </Button>
-        </div>
-      </form>
-    </Modal>
+      )}
+      <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button type="submit" loading={guardar.isPending}>
+          {mode === 'crear' ? 'Crear tarea' : 'Guardar'}
+        </Button>
+      </div>
+    </form>
+  </Modal>
   );
 }
+     

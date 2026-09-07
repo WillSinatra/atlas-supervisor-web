@@ -27,6 +27,7 @@ import { mensajeDeError } from '@/shared/services/api';
 import { plantillasApi, tareasApi } from '@/shared/services/tareas';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { TareaModal } from '@/modules/tareas/components/TareaModal';
+import { AsignarEmpleadoMenu } from '@/modules/tareas/components/AsignarEmpleadoMenu';
 import { PlantillaModal } from '@/modules/tareas/components/PlantillaModal';
 import { TareasDashboard } from '@/modules/tareas/components/TareasDashboard';
 import {
@@ -111,6 +112,7 @@ export default function TareasPage() {
   }, [pestana]);
 
   const [nuevaTarea, setNuevaTarea] = useState(false);
+  const [tareaEnEdicion, setTareaEnEdicion] = useState<Tarea | null>(null);  
   const [plantillaEnEdicion, setPlantillaEnEdicion] = useState<TareaPlantilla | null>(null);
   const [modalPlantilla, setModalPlantilla] = useState(false);
 
@@ -150,14 +152,35 @@ export default function TareasPage() {
 
       <TareaModal
         open={nuevaTarea}
+        mode="crear"
         onClose={() => setNuevaTarea(false)}
         onGuardada={() => {
           refrescar();
           setNuevaTarea(false);
         }}
       />
+      <TareaModal
+        open={!!tareaEnEdicion && tareaEnEdicion?.empleado !== null}
+        mode="editar"
+        tarea={tareaEnEdicion || undefined}
+        onClose={() => setTareaEnEdicion(null)}
+        onGuardada={() => {
+          refrescar();
+          setTareaEnEdicion(null);
+        }}
+      />
+      <TareaModal
+        open={!!tareaEnEdicion && tareaEnEdicion?.empleado === null}
+        mode="asignar"
+        tarea={tareaEnEdicion || undefined}
+        onClose={() => setTareaEnEdicion(null)}
+        onGuardada={() => {
+          refrescar();
+          setTareaEnEdicion(null);
+        }}
+      />
 
-      <PlantillaModal
+     <PlantillaModal
         open={modalPlantilla}
         plantilla={plantillaEnEdicion}
         onClose={() => setModalPlantilla(false)}
@@ -183,6 +206,7 @@ export default function TareasPage() {
             <ListaTareas
               filtro={tabId === 'pedidas' ? 'creadas_por_mi' : tabId === 'recibidas' ? 'todas' : 'mias'}
               miEmpleadoId={user?.empleado_id ?? null}
+              onEditarTarea={setTareaEnEdicion}
             />
           )
         }
@@ -209,9 +233,11 @@ function leerFiltroEstadoGuardado(): FiltroEstadoTab {
 function ListaTareas({
   filtro,
   miEmpleadoId,
+  onEditarTarea,
 }: {
   filtro: 'mias' | 'creadas_por_mi' | 'todas';
   miEmpleadoId: string | null;
+  onEditarTarea: (tarea: Tarea) => void;
 }) {
   // Reemplaza el viejo checkbox "Mostrar también hechas y canceladas": separar
   // en tres pestañas deja claro qué se está viendo, en vez de una lista mixta.
@@ -330,7 +356,7 @@ function ListaTareas({
       ) : (
         <div className="space-y-3">
           {tareasFiltradas.map((tarea) => (
-            <TarjetaTarea key={tarea.id} tarea={tarea} miEmpleadoId={miEmpleadoId} />
+            <TarjetaTarea key={tarea.id} tarea={tarea} miEmpleadoId={miEmpleadoId} onEditar={onEditarTarea} />
           ))}
         </div>
       )}
@@ -338,7 +364,7 @@ function ListaTareas({
   );
 }
 
-function TarjetaTarea({ tarea, miEmpleadoId }: { tarea: Tarea; miEmpleadoId: string | null }) {
+function TarjetaTarea({ tarea, miEmpleadoId, onEditar }: { tarea: Tarea; miEmpleadoId: string | null; onEditar: (tarea: Tarea) => void }) {
   const queryClient = useQueryClient();
   const [aEliminar, setAEliminar] = useState(false);
 
@@ -434,16 +460,39 @@ function TarjetaTarea({ tarea, miEmpleadoId }: { tarea: Tarea; miEmpleadoId: str
               Tomar
             </Button>
           )}
-          {!cerrada && (
+          {/* Admin: asignar a alguien del sector */}
+          {!cerrada && !tarea.empleado && (
             <Button
               size="sm"
               variant="secondary"
-              icon={<CheckCircle2 className="w-4 h-4" />}
-              loading={cambiarEstado.isPending}
-              onClick={() => cambiarEstado.mutate('hecha')}
+              icon={<Pencil className="w-4 h-4" />}
+              onClick={() => onEditar(tarea)}
             >
-              Hecha
+              Asignar
             </Button>
+          )}
+          {!cerrada && (
+            <>
+              {(miEmpleadoId === tarea.creado_por?.id) && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Pencil className="w-4 h-4" />}
+                  onClick={() => onEditar(tarea)}
+                >
+                  Editar
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<CheckCircle2 className="w-4 h-4" />}
+                loading={cambiarEstado.isPending}
+                onClick={() => cambiarEstado.mutate('hecha')}
+              >
+                Hecha
+              </Button>
+            </>
           )}
           {cerrada && (
             <Button

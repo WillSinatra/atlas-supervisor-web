@@ -566,6 +566,7 @@ export const cuadrillasApi = {
       zona: string | null;
       lat: number;
       lng: number;
+      horario_disponibilidad: { dias_semana: string[]; hora_inicio: string; hora_fin: string } | null;
     }>,
   ) {
     const { data } = await api.patch<Cuadrilla>(`/v1/cuadrillas/${id}`, payload);
