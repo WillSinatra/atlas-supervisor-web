@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -61,6 +61,7 @@ export default function SoportePage() {
   const [liberarJustificacion, setLiberarJustificacion] = useState('');
   const { data: areas = [] } = useAreas();
   const navigate = useNavigate();
+  const { id: ticketId } = useParams<{ id?: string }>();
   const [busqueda, setBusqueda] = useState('');
   const [tipo, setTipo] = useState('');
   const [areaId, setAreaId] = useState('');
@@ -125,6 +126,19 @@ export default function SoportePage() {
     
     return filtrados;
   }, [data, busqueda, areaId]);
+
+  // Al llegar desde una notificación (/soporte/{id}), selecciona ese ticket
+  // apenas esté cargado en la lista. Si el ticket no está en `tickets` (por
+  // ejemplo, quedó afuera del filtro de estado activo), no hace nada — eso
+  // requeriría poder traerlo suelto con ticketsBetaApi.detalle(id).
+  useEffect(() => {
+    if (ticketId && tickets.length > 0) {
+      const ticketEncontrado = tickets.find((t) => t.id === ticketId);
+      if (ticketEncontrado) {
+        setSeleccionado(ticketEncontrado.id);
+      }
+    }
+  }, [ticketId, tickets]);
 
   const ticket = tickets.find((t) => t.id === seleccionado) ?? tickets[0] ?? null;
   // Dentro del archivo donde definís el componente Dato:

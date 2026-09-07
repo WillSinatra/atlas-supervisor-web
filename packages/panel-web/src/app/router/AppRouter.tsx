@@ -101,7 +101,7 @@ export const router = createBrowserRouter([
         element: <TicketsPage />,
       },
       {
-        path: 'soporte',
+        path: 'soporte/:id?',
         element: <SoportePage />,
       },
       {
